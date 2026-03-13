@@ -19,6 +19,7 @@ export async function GET(
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   code: z.string().max(50000).optional(),
+  positions: z.string().max(100000).optional(),
 });
 
 export async function PUT(

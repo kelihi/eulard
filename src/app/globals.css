@@ -37,3 +37,15 @@ body {
   max-width: 100%;
   height: auto;
 }
+
+/* React Flow overrides */
+.react-flow__minimap {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.react-flow__controls {
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: none;
+}

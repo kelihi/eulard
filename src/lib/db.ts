@@ -20,10 +20,17 @@ function getDb() {
         title TEXT NOT NULL DEFAULT 'Untitled Diagram',
         code TEXT NOT NULL DEFAULT 'flowchart TB
     A[Start] --> B[End]',
+        positions TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
     `);
+
+    // Migration: add positions column if missing
+    const cols = _db.pragma("table_info(diagrams)") as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "positions")) {
+      _db.exec("ALTER TABLE diagrams ADD COLUMN positions TEXT");
+    }
   }
   return _db;
 }
@@ -37,7 +44,7 @@ export function listDiagrams() {
 export function getDiagram(id: string) {
   return getDb()
     .prepare(
-      "SELECT id, title, code, created_at as createdAt, updated_at as updatedAt FROM diagrams WHERE id = ?"
+      "SELECT id, title, code, positions, created_at as createdAt, updated_at as updatedAt FROM diagrams WHERE id = ?"
     )
     .get(id);
 }
@@ -51,7 +58,7 @@ export function createDiagram(id: string, title: string, code: string) {
 
 export function updateDiagram(
   id: string,
-  data: { title?: string; code?: string }
+  data: { title?: string; code?: string; positions?: string }
 ) {
   const fields: string[] = [];
   const values: (string | undefined)[] = [];
@@ -63,6 +70,10 @@ export function updateDiagram(
   if (data.code !== undefined) {
     fields.push("code = ?");
     values.push(data.code);
+  }
+  if (data.positions !== undefined) {
+    fields.push("positions = ?");
+    values.push(data.positions);
   }
 
   if (fields.length === 0) return getDiagram(id);

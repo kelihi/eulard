@@ -10,6 +10,7 @@ interface DiagramStore {
 
   setCode: (code: string) => void;
   setTitle: (title: string) => void;
+  setPositions: (positions: string) => void;
   setSyncState: (state: DiagramStore["syncState"]) => void;
   setError: (error: string | null) => void;
 
@@ -22,6 +23,13 @@ interface DiagramStore {
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
+function scheduleSave(get: () => DiagramStore) {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    get().saveDiagram();
+  }, 1000);
+}
+
 export const useDiagramStore = create<DiagramStore>((set, get) => ({
   diagram: null,
   diagrams: [],
@@ -33,23 +41,21 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     const { diagram } = get();
     if (!diagram) return;
     set({ diagram: { ...diagram, code }, isDirty: true, error: null });
-
-    // Auto-save with 1s debounce
-    if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      get().saveDiagram();
-    }, 1000);
+    scheduleSave(get);
   },
 
   setTitle: (title: string) => {
     const { diagram } = get();
     if (!diagram) return;
     set({ diagram: { ...diagram, title }, isDirty: true });
+    scheduleSave(get);
+  },
 
-    if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(() => {
-      get().saveDiagram();
-    }, 1000);
+  setPositions: (positions: string) => {
+    const { diagram } = get();
+    if (!diagram) return;
+    set({ diagram: { ...diagram, positions }, isDirty: true });
+    scheduleSave(get);
   },
 
   setSyncState: (syncState) => set({ syncState }),
@@ -78,10 +84,13 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
       await fetch(`/api/diagrams/${diagram.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: diagram.title, code: diagram.code }),
+        body: JSON.stringify({
+          title: diagram.title,
+          code: diagram.code,
+          positions: diagram.positions,
+        }),
       });
       set({ isDirty: false, syncState: "idle" });
-      // Refresh sidebar list
       get().loadDiagrams();
     } catch {
       set({ syncState: "idle" });

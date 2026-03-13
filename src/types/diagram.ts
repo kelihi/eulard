@@ -2,6 +2,7 @@ export interface DiagramState {
   id: string;
   title: string;
   code: string;
+  positions: string | null;
   createdAt: string;
   updatedAt: string;
 }
