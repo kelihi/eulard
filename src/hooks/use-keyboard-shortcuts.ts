@@ -5,6 +5,8 @@ import { useDiagramStore } from "@/stores/diagram-store";
 
 export function useKeyboardShortcuts() {
   const saveDiagram = useDiagramStore((s) => s.saveDiagram);
+  const undo = useDiagramStore((s) => s.undo);
+  const redo = useDiagramStore((s) => s.redo);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -14,8 +16,18 @@ export function useKeyboardShortcuts() {
         e.preventDefault();
         saveDiagram();
       }
+
+      if (mod && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+
+      if (mod && e.key === "z" && e.shiftKey) {
+        e.preventDefault();
+        redo();
+      }
     },
-    [saveDiagram]
+    [saveDiagram, undo, redo]
   );
 
   useEffect(() => {

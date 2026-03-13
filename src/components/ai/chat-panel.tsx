@@ -4,11 +4,14 @@ import { useChat } from "@ai-sdk/react";
 import { useEffect, useRef } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
 import { ChatMessage } from "./chat-message";
+import { downloadPng, downloadSvg, downloadMermaidCode } from "@/lib/export";
 import { Send, Sparkles } from "lucide-react";
 
 export function ChatPanel() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
+  const title = useDiagramStore((s) => s.diagram?.title ?? "diagram");
   const setCode = useDiagramStore((s) => s.setCode);
+  const setTitle = useDiagramStore((s) => s.setTitle);
   const setSyncState = useDiagramStore((s) => s.setSyncState);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -26,6 +29,45 @@ export function ChatPanel() {
             return "Diagram updated successfully.";
           } catch {
             return "Error: AI generated invalid mermaid syntax. Please try again.";
+          }
+        }
+
+        if (toolCall.toolName === "updateMetadata") {
+          const args = toolCall.args as { title?: string; direction?: string };
+          if (args.title) {
+            setTitle(args.title);
+          }
+          if (args.direction) {
+            // Update the direction in the code
+            const newCode = code.replace(
+              /^(flowchart|graph)\s+(TB|BT|LR|RL|TD)/m,
+              `$1 ${args.direction}`
+            );
+            if (newCode !== code) {
+              setCode(newCode);
+            }
+          }
+          return "Metadata updated successfully.";
+        }
+
+        if (toolCall.toolName === "exportDiagram") {
+          const args = toolCall.args as { format: "png" | "svg" | "mermaid" };
+          const filename = title.replace(/[^a-zA-Z0-9-_]/g, "_") || "diagram";
+          try {
+            switch (args.format) {
+              case "png":
+                await downloadPng(code, filename);
+                break;
+              case "svg":
+                await downloadSvg(code, filename);
+                break;
+              case "mermaid":
+                downloadMermaidCode(code, filename);
+                break;
+            }
+            return `Diagram exported as ${args.format.toUpperCase()} successfully.`;
+          } catch {
+            return `Error: Failed to export diagram as ${args.format}.`;
           }
         }
       },

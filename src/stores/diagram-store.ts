@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type { DiagramState, DiagramListItem } from "@/types/diagram";
 
+const MAX_HISTORY = 50;
+
 interface DiagramStore {
   diagram: DiagramState | null;
   diagrams: DiagramListItem[];
@@ -8,11 +10,20 @@ interface DiagramStore {
   syncState: "idle" | "ai-streaming" | "saving";
   error: string | null;
 
+  // Undo/redo
+  undoStack: string[];
+  redoStack: string[];
+  canUndo: boolean;
+  canRedo: boolean;
+
   setCode: (code: string) => void;
   setTitle: (title: string) => void;
   setPositions: (positions: string) => void;
   setSyncState: (state: DiagramStore["syncState"]) => void;
   setError: (error: string | null) => void;
+
+  undo: () => void;
+  redo: () => void;
 
   loadDiagram: (id: string) => Promise<void>;
   loadDiagrams: () => Promise<void>;
@@ -22,6 +33,7 @@ interface DiagramStore {
 }
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
+let undoTimeout: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleSave(get: () => DiagramStore) {
   if (saveTimeout) clearTimeout(saveTimeout);
@@ -36,10 +48,23 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   isDirty: false,
   syncState: "idle",
   error: null,
+  undoStack: [],
+  redoStack: [],
+  canUndo: false,
+  canRedo: false,
 
   setCode: (code: string) => {
-    const { diagram } = get();
+    const { diagram, undoStack } = get();
     if (!diagram) return;
+
+    // Debounce undo snapshots — batch rapid typing into one undo step
+    if (undoTimeout) clearTimeout(undoTimeout);
+    const prevCode = diagram.code;
+    undoTimeout = setTimeout(() => {
+      const newStack = [...undoStack, prevCode].slice(-MAX_HISTORY);
+      set({ undoStack: newStack, redoStack: [], canUndo: true, canRedo: false });
+    }, 500);
+
     set({ diagram: { ...diagram, code }, isDirty: true, error: null });
     scheduleSave(get);
   },
@@ -61,11 +86,63 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   setSyncState: (syncState) => set({ syncState }),
   setError: (error) => set({ error }),
 
+  undo: () => {
+    const { diagram, undoStack, redoStack } = get();
+    if (!diagram || undoStack.length === 0) return;
+
+    // Flush any pending undo snapshot
+    if (undoTimeout) {
+      clearTimeout(undoTimeout);
+      undoTimeout = null;
+    }
+
+    const prevCode = undoStack[undoStack.length - 1];
+    const newUndoStack = undoStack.slice(0, -1);
+    const newRedoStack = [...redoStack, diagram.code];
+
+    set({
+      diagram: { ...diagram, code: prevCode },
+      undoStack: newUndoStack,
+      redoStack: newRedoStack,
+      canUndo: newUndoStack.length > 0,
+      canRedo: true,
+      isDirty: true,
+    });
+    scheduleSave(get);
+  },
+
+  redo: () => {
+    const { diagram, undoStack, redoStack } = get();
+    if (!diagram || redoStack.length === 0) return;
+
+    const nextCode = redoStack[redoStack.length - 1];
+    const newRedoStack = redoStack.slice(0, -1);
+    const newUndoStack = [...undoStack, diagram.code];
+
+    set({
+      diagram: { ...diagram, code: nextCode },
+      undoStack: newUndoStack,
+      redoStack: newRedoStack,
+      canUndo: true,
+      canRedo: newRedoStack.length > 0,
+      isDirty: true,
+    });
+    scheduleSave(get);
+  },
+
   loadDiagram: async (id: string) => {
     const res = await fetch(`/api/diagrams/${id}`);
     if (!res.ok) throw new Error("Failed to load diagram");
     const diagram = await res.json();
-    set({ diagram, isDirty: false, error: null });
+    set({
+      diagram,
+      isDirty: false,
+      error: null,
+      undoStack: [],
+      redoStack: [],
+      canUndo: false,
+      canRedo: false,
+    });
   },
 
   loadDiagrams: async () => {
@@ -104,7 +181,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
       body: JSON.stringify({}),
     });
     const diagram = await res.json();
-    set({ diagram, isDirty: false });
+    set({ diagram, isDirty: false, undoStack: [], redoStack: [], canUndo: false, canRedo: false });
     get().loadDiagrams();
     return diagram.id;
   },
