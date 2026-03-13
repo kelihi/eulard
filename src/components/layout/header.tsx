@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
 import { Save, MessageSquare } from "lucide-react";
+import { Toolbar } from "@/components/editor/toolbar";
 
 interface HeaderProps {
   onToggleChat: () => void;
@@ -69,6 +70,8 @@ export function Header({ onToggleChat, chatOpen }: HeaderProps) {
       <div className="flex-1" />
 
       {/* Actions */}
+      <Toolbar />
+
       <button
         onClick={handleSave}
         disabled={!isDirty}
