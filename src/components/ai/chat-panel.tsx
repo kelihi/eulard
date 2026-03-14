@@ -1,84 +1,82 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
 import { ChatMessage } from "./chat-message";
 import { downloadPng, downloadSvg, downloadMermaidCode } from "@/lib/export";
-import { Send, Sparkles } from "lucide-react";
+import { mermaidToGraph } from "@/lib/parser/mermaid-to-graph";
+import type { FlowchartGraph } from "@/types/graph";
+import { graphToMermaid } from "@/lib/parser/graph-to-mermaid";
+import { incrementalLayout } from "@/lib/parser/auto-layout";
+import {
+  applyAddNodes,
+  applyRemoveNodes,
+  applyUpdateNodes,
+  applyAddEdges,
+  applyRemoveEdges,
+  applyUpdateEdges,
+} from "@/lib/graph-operations";
+import {
+  addNodesSchema,
+  removeNodesSchema,
+  updateNodesSchema,
+  addEdgesSchema,
+  removeEdgesSchema,
+  updateEdgesSchema,
+  replaceDiagramSchema,
+} from "@/lib/ai/tools";
+import { Send, Sparkles, Loader2, CheckCircle2 } from "lucide-react";
+
+// Track pending tool calls for safe batch timing
+let pendingToolCalls = 0;
+let finishFired = false;
+
+function maybeEndBatch() {
+  if (finishFired && pendingToolCalls === 0) {
+    useDiagramStore.getState().endBatch();
+    useDiagramStore.getState().setSyncState("idle");
+    finishFired = false;
+  }
+}
 
 export function ChatPanel() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
   const title = useDiagramStore((s) => s.diagram?.title ?? "diagram");
-  const setCode = useDiagramStore((s) => s.setCode);
-  const setTitle = useDiagramStore((s) => s.setTitle);
-  const setSyncState = useDiagramStore((s) => s.setSyncState);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [showDone, setShowDone] = useState(false);
 
   const { messages, input, handleInputChange, handleSubmit, status } =
     useChat({
       api: "/api/ai/chat",
       body: { currentCode: code },
       onToolCall: async ({ toolCall }) => {
-        if (toolCall.toolName === "updateDiagram") {
-          const args = toolCall.args as { code: string };
-          try {
-            const mermaid = (await import("mermaid")).default;
-            await mermaid.parse(args.code);
-            setCode(args.code);
-            return "Diagram updated successfully.";
-          } catch {
-            return "Error: AI generated invalid mermaid syntax. Please try again.";
-          }
-        }
-
-        if (toolCall.toolName === "updateMetadata") {
-          const args = toolCall.args as { title?: string; direction?: string };
-          if (args.title) {
-            setTitle(args.title);
-          }
-          if (args.direction) {
-            // Update the direction in the code
-            const newCode = code.replace(
-              /^(flowchart|graph)\s+(TB|BT|LR|RL|TD)/m,
-              `$1 ${args.direction}`
-            );
-            if (newCode !== code) {
-              setCode(newCode);
-            }
-          }
-          return "Metadata updated successfully.";
-        }
-
-        if (toolCall.toolName === "exportDiagram") {
-          const args = toolCall.args as { format: "png" | "svg" | "mermaid" };
-          const filename = title.replace(/[^a-zA-Z0-9-_]/g, "_") || "diagram";
-          try {
-            switch (args.format) {
-              case "png":
-                await downloadPng(code, filename);
-                break;
-              case "svg":
-                await downloadSvg(code, filename);
-                break;
-              case "mermaid":
-                downloadMermaidCode(code, filename);
-                break;
-            }
-            return `Diagram exported as ${args.format.toUpperCase()} successfully.`;
-          } catch {
-            return `Error: Failed to export diagram as ${args.format}.`;
-          }
+        pendingToolCalls++;
+        try {
+          return await handleToolCall(toolCall);
+        } finally {
+          pendingToolCalls--;
+          maybeEndBatch();
         }
       },
       onResponse: () => {
-        setSyncState("ai-streaming");
+        finishFired = false;
+        pendingToolCalls = 0;
+        useDiagramStore.getState().beginBatch();
+        useDiagramStore.getState().setSyncState("ai-streaming");
       },
       onFinish: () => {
-        setSyncState("idle");
+        finishFired = true;
+        maybeEndBatch();
+        setShowDone(true);
+        setTimeout(() => setShowDone(false), 2000);
       },
       onError: () => {
-        setSyncState("idle");
+        // End batch on error to avoid stuck state
+        useDiagramStore.getState().endBatch();
+        useDiagramStore.getState().setSyncState("idle");
+        finishFired = false;
+        pendingToolCalls = 0;
       },
     });
 
@@ -87,7 +85,7 @@ export function ChatPanel() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, status]);
 
   const isLoading = status === "streaming" || status === "submitted";
 
@@ -135,6 +133,26 @@ export function ChatPanel() {
           }
           return null;
         })}
+
+        {/* Status indicators */}
+        {status === "submitted" && (
+          <div className="flex items-center gap-2 px-4 py-2 text-xs text-[var(--muted-foreground)]">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--primary)]" />
+            <span>Thinking...</span>
+          </div>
+        )}
+        {status === "streaming" && (
+          <div className="flex items-center gap-2 px-4 py-2 text-xs text-[var(--primary)]">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>Writing...</span>
+          </div>
+        )}
+        {showDone && !isLoading && (
+          <div className="flex items-center gap-2 px-4 py-2 text-xs text-green-500">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Done</span>
+          </div>
+        )}
       </div>
 
       {/* Input */}
@@ -161,4 +179,170 @@ export function ChatPanel() {
       </form>
     </div>
   );
+}
+
+// --- Tool call handler ---
+
+async function handleToolCall(toolCall: { toolName: string; args: unknown }): Promise<string> {
+  // Helper: get latest state (avoids stale closures)
+  const getCode = () => useDiagramStore.getState().diagram?.code;
+  const getTitle = () => useDiagramStore.getState().diagram?.title ?? "diagram";
+
+  // Helper: parse current code to graph, return error string if not flowchart
+  function parseGraph():
+    | { ok: true; graph: FlowchartGraph }
+    | { ok: false; error: string } {
+    const currentCode = getCode();
+    if (!currentCode) return { ok: false, error: "Error: No diagram loaded." };
+    const graph = mermaidToGraph(currentCode);
+    if (!graph) return { ok: false, error: "Error: Current diagram is not a flowchart. Use replaceDiagram instead." };
+    return { ok: true, graph };
+  }
+
+  // --- Graph operation tools ---
+
+  if (toolCall.toolName === "addNodes") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = addNodesSchema.parse(toolCall.args);
+    const result = applyAddNodes(parsed.graph, args.nodes);
+    if (!result.ok) return result.error;
+
+    const laid = incrementalLayout(result.graph, args.nodes.map((n) => n.id));
+    const newCode = graphToMermaid(laid);
+    useDiagramStore.getState().setCode(newCode);
+    return `Added ${args.nodes.length} node(s): ${args.nodes.map((n) => n.id).join(", ")}`;
+  }
+
+  if (toolCall.toolName === "removeNodes") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = removeNodesSchema.parse(toolCall.args);
+    const result = applyRemoveNodes(parsed.graph, args.nodeIds);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Removed ${args.nodeIds.length} node(s): ${args.nodeIds.join(", ")}`;
+  }
+
+  if (toolCall.toolName === "updateNodes") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = updateNodesSchema.parse(toolCall.args);
+    const result = applyUpdateNodes(parsed.graph, args.updates);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Updated ${args.updates.length} node(s): ${args.updates.map((u) => u.id).join(", ")}`;
+  }
+
+  if (toolCall.toolName === "addEdges") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = addEdgesSchema.parse(toolCall.args);
+    const result = applyAddEdges(parsed.graph, args.edges);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Added ${args.edges.length} edge(s)`;
+  }
+
+  if (toolCall.toolName === "removeEdges") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = removeEdgesSchema.parse(toolCall.args);
+    const result = applyRemoveEdges(parsed.graph, args.edges);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Removed ${args.edges.length} edge(s)`;
+  }
+
+  if (toolCall.toolName === "updateEdges") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = updateEdgesSchema.parse(toolCall.args);
+    const result = applyUpdateEdges(parsed.graph, args.updates);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Updated ${args.updates.length} edge(s)`;
+  }
+
+  // --- replaceDiagram (escape hatch) ---
+
+  if (toolCall.toolName === "replaceDiagram") {
+    const args = replaceDiagramSchema.parse(toolCall.args);
+    try {
+      const mermaid = (await import("mermaid")).default;
+      await mermaid.parse(args.code);
+      useDiagramStore.getState().setCode(args.code);
+
+      // Warn if this was a flowchart — prefer granular tools
+      const isFlowchart = mermaidToGraph(args.code) !== null;
+      if (isFlowchart) {
+        return "Diagram replaced. Tip: For flowchart edits, prefer addNodes/addEdges/etc. for incremental changes.";
+      }
+      return "Diagram replaced successfully.";
+    } catch {
+      return "Error: Invalid mermaid syntax. Please try again with valid code.";
+    }
+  }
+
+  // --- updateMetadata ---
+
+  if (toolCall.toolName === "updateMetadata") {
+    const args = toolCall.args as { title?: string; direction?: string };
+    if (args.title) {
+      useDiagramStore.getState().setTitle(args.title);
+    }
+    if (args.direction) {
+      const currentCode = getCode() ?? "";
+      const newCode = currentCode.replace(
+        /^(flowchart|graph)\s+(TB|BT|LR|RL|TD)/m,
+        `$1 ${args.direction}`
+      );
+      if (newCode !== currentCode) {
+        useDiagramStore.getState().setCode(newCode);
+      }
+    }
+    return "Metadata updated successfully.";
+  }
+
+  // --- exportDiagram ---
+
+  if (toolCall.toolName === "exportDiagram") {
+    const args = toolCall.args as { format: "png" | "svg" | "mermaid" };
+    const currentCode = getCode() ?? "";
+    const filename = getTitle().replace(/[^a-zA-Z0-9-_]/g, "_") || "diagram";
+    try {
+      switch (args.format) {
+        case "png":
+          await downloadPng(currentCode, filename);
+          break;
+        case "svg":
+          await downloadSvg(currentCode, filename);
+          break;
+        case "mermaid":
+          downloadMermaidCode(currentCode, filename);
+          break;
+      }
+      return `Diagram exported as ${args.format.toUpperCase()} successfully.`;
+    } catch {
+      return `Error: Failed to export diagram as ${args.format}.`;
+    }
+  }
+
+  return "Unknown tool.";
 }

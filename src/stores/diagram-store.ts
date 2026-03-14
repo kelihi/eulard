@@ -1,11 +1,12 @@
 import { create } from "zustand";
-import type { DiagramState, DiagramListItem } from "@/types/diagram";
+import type { DiagramState, DiagramListItem, Folder } from "@/types/diagram";
 
 const MAX_HISTORY = 50;
 
 interface DiagramStore {
   diagram: DiagramState | null;
   diagrams: DiagramListItem[];
+  folders: Folder[];
   isDirty: boolean;
   syncState: "idle" | "ai-streaming" | "saving";
   error: string | null;
@@ -15,6 +16,11 @@ interface DiagramStore {
   redoStack: string[];
   canUndo: boolean;
   canRedo: boolean;
+
+  // Batch undo (for multi-step AI tool calls)
+  _batchStartCode: string | undefined;
+  beginBatch: () => void;
+  endBatch: () => void;
 
   setCode: (code: string) => void;
   setTitle: (title: string) => void;
@@ -28,8 +34,14 @@ interface DiagramStore {
   loadDiagram: (id: string) => Promise<void>;
   loadDiagrams: () => Promise<void>;
   saveDiagram: () => Promise<void>;
-  createDiagram: () => Promise<string>;
+  createDiagram: (folderId?: string) => Promise<string>;
   deleteDiagram: (id: string) => Promise<void>;
+  moveDiagram: (diagramId: string, folderId: string | null) => Promise<void>;
+
+  loadFolders: () => Promise<void>;
+  createFolder: (name?: string) => Promise<string>;
+  renameFolder: (id: string, name: string) => Promise<void>;
+  deleteFolder: (id: string) => Promise<void>;
 }
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -45,6 +57,7 @@ function scheduleSave(get: () => DiagramStore) {
 export const useDiagramStore = create<DiagramStore>((set, get) => ({
   diagram: null,
   diagrams: [],
+  folders: [],
   isDirty: false,
   syncState: "idle",
   error: null,
@@ -52,18 +65,49 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   redoStack: [],
   canUndo: false,
   canRedo: false,
+  _batchStartCode: undefined,
 
-  setCode: (code: string) => {
-    const { diagram, undoStack } = get();
+  beginBatch: () => {
+    const { diagram } = get();
     if (!diagram) return;
 
-    // Debounce undo snapshots — batch rapid typing into one undo step
-    if (undoTimeout) clearTimeout(undoTimeout);
-    const prevCode = diagram.code;
-    undoTimeout = setTimeout(() => {
-      const newStack = [...undoStack, prevCode].slice(-MAX_HISTORY);
-      set({ undoStack: newStack, redoStack: [], canUndo: true, canRedo: false });
-    }, 500);
+    // Clear any pending undo debounce timer to prevent
+    // a partial snapshot from being pushed mid-batch
+    if (undoTimeout) {
+      clearTimeout(undoTimeout);
+      undoTimeout = null;
+    }
+
+    set({ _batchStartCode: diagram.code });
+  },
+
+  endBatch: () => {
+    const { _batchStartCode, undoStack } = get();
+    if (_batchStartCode !== undefined) {
+      const newStack = [...undoStack, _batchStartCode].slice(-MAX_HISTORY);
+      set({
+        undoStack: newStack,
+        redoStack: [],
+        canUndo: true,
+        canRedo: false,
+        _batchStartCode: undefined,
+      });
+    }
+  },
+
+  setCode: (code: string) => {
+    const { diagram, _batchStartCode } = get();
+    if (!diagram) return;
+
+    // Only push undo snapshots outside of batch operations
+    if (_batchStartCode === undefined) {
+      if (undoTimeout) clearTimeout(undoTimeout);
+      const prevCode = diagram.code;
+      undoTimeout = setTimeout(() => {
+        const newStack = [...get().undoStack, prevCode].slice(-MAX_HISTORY);
+        set({ undoStack: newStack, redoStack: [], canUndo: true, canRedo: false });
+      }, 500);
+    }
 
     set({ diagram: { ...diagram, code }, isDirty: true, error: null });
     scheduleSave(get);
@@ -174,11 +218,11 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     }
   },
 
-  createDiagram: async () => {
+  createDiagram: async (folderId?: string) => {
     const res = await fetch("/api/diagrams", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ folderId }),
     });
     const diagram = await res.json();
     set({ diagram, isDirty: false, undoStack: [], redoStack: [], canUndo: false, canRedo: false });
@@ -192,6 +236,56 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     if (diagram?.id === id) {
       set({ diagram: null });
     }
+    get().loadDiagrams();
+  },
+
+  moveDiagram: async (diagramId: string, folderId: string | null) => {
+    await fetch(`/api/diagrams/${diagramId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId }),
+    });
+    const { diagram } = get();
+    if (diagram?.id === diagramId) {
+      set({ diagram: { ...diagram, folderId } });
+    }
+    get().loadDiagrams();
+  },
+
+  loadFolders: async () => {
+    const res = await fetch("/api/folders");
+    if (!res.ok) return;
+    const folders = await res.json();
+    set({ folders });
+  },
+
+  createFolder: async (name?: string) => {
+    const res = await fetch("/api/folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const folder = await res.json();
+    get().loadFolders();
+    return folder.id;
+  },
+
+  renameFolder: async (id: string, name: string) => {
+    await fetch("/api/folders", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, name }),
+    });
+    get().loadFolders();
+  },
+
+  deleteFolder: async (id: string) => {
+    await fetch("/api/folders", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    get().loadFolders();
     get().loadDiagrams();
   },
 }));

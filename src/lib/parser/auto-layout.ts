@@ -40,6 +40,39 @@ export function autoLayout(graph: FlowchartGraph): FlowchartGraph {
   };
 }
 
+/**
+ * Incremental layout: position only new nodes via dagre while preserving
+ * existing node positions. Used by AI graph operations.
+ */
+export function incrementalLayout(
+  graph: FlowchartGraph,
+  newNodeIds: string[]
+): FlowchartGraph {
+  if (newNodeIds.length === 0) return graph;
+
+  // Run full dagre layout on a copy to get ideal positions for new nodes
+  const layoutCopy: FlowchartGraph = {
+    ...graph,
+    nodes: graph.nodes.map((n) => ({ ...n, position: { ...n.position } })),
+    edges: graph.edges.map((e) => ({ ...e })),
+  };
+  const fullLayout = autoLayout(layoutCopy);
+
+  // For existing nodes: keep current positions
+  // For new nodes: use dagre's computed positions
+  const newIdSet = new Set(newNodeIds);
+  return {
+    ...graph,
+    nodes: graph.nodes.map((node) => {
+      if (newIdSet.has(node.id)) {
+        const laid = fullLayout.nodes.find((n) => n.id === node.id);
+        return laid ? { ...node, position: laid.position } : node;
+      }
+      return node;
+    }),
+  };
+}
+
 function directionToRankdir(direction: FlowchartDirection): string {
   switch (direction) {
     case "TB":
