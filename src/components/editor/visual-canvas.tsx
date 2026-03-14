@@ -21,7 +21,17 @@ import { graphToMermaid } from "@/lib/parser/graph-to-mermaid";
 import { autoLayout } from "@/lib/parser/auto-layout";
 import { updateGraphPositions } from "@/lib/parser/reactflow-to-graph";
 import { customNodeTypes } from "./custom-nodes";
+import { customEdgeTypes } from "./custom-edges";
+import { NodeContextMenu } from "./node-context-menu";
 import type { FlowchartGraph } from "@/types/graph";
+import type { MermaidNodeType } from "@/types/graph";
+
+interface ContextMenuState {
+  nodeId: string;
+  nodeLabel: string;
+  x: number;
+  y: number;
+}
 
 export function VisualCanvas() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
@@ -34,6 +44,49 @@ export function VisualCanvas() {
   const generationRef = useRef(0);
   const isDraggingRef = useRef(false);
   const codeFromCanvasRef = useRef<string | null>(null);
+
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  const isLocked = syncState === "ai-streaming";
+
+  // Sync code back to store from graph
+  const syncGraphToCode = useCallback(
+    (updatedGraph: FlowchartGraph) => {
+      graphRef.current = updatedGraph;
+      const newCode = graphToMermaid(updatedGraph);
+      codeFromCanvasRef.current = newCode;
+      setCode(newCode);
+    },
+    [setCode]
+  );
+
+  // Edge rename handler — passed into edge data
+  const handleRenameEdge = useCallback(
+    (edgeId: string, newLabel: string) => {
+      if (!graphRef.current || isLocked) return;
+      const updatedGraph: FlowchartGraph = {
+        ...graphRef.current,
+        edges: graphRef.current.edges.map((e) =>
+          e.id === edgeId ? { ...e, label: newLabel || undefined } : e
+        ),
+      };
+      syncGraphToCode(updatedGraph);
+    },
+    [isLocked, syncGraphToCode]
+  );
+
+  // Inject onRenameEdge callback into edge data after edges are set
+  const injectEdgeCallbacks = useCallback(
+    (rawEdges: Edge[]): Edge[] =>
+      rawEdges.map((edge) => ({
+        ...edge,
+        data: {
+          ...edge.data,
+          onRenameEdge: handleRenameEdge,
+        },
+      })),
+    [handleRenameEdge]
+  );
 
   // Parse code to graph, then to React Flow — debounced
   useEffect(() => {
@@ -73,13 +126,16 @@ export function VisualCanvas() {
       graphRef.current = layoutGraph;
       const { nodes: newNodes, edges: newEdges } = graphToReactFlow(layoutGraph);
       setNodes(newNodes);
-      setEdges(newEdges);
+      setEdges(injectEdgeCallbacks(newEdges));
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [code]);
+  }, [code, injectEdgeCallbacks]);
 
-  const isLocked = syncState === "ai-streaming";
+  // Re-inject edge callbacks when handleRenameEdge changes
+  useEffect(() => {
+    setEdges((prev) => injectEdgeCallbacks(prev));
+  }, [injectEdgeCallbacks]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -107,17 +163,14 @@ export function VisualCanvas() {
               graphRef.current,
               updatedNodes
             );
-            graphRef.current = updatedGraph;
-            const newCode = graphToMermaid(updatedGraph);
-            codeFromCanvasRef.current = newCode;
-            setCode(newCode);
+            syncGraphToCode(updatedGraph);
           }
         }
 
         return updatedNodes;
       });
     },
-    [isLocked, setCode]
+    [isLocked, syncGraphToCode]
   );
 
   const onEdgesChange = useCallback(
@@ -127,6 +180,95 @@ export function VisualCanvas() {
     },
     [isLocked]
   );
+
+  // Context menu handlers
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      if (isLocked) return;
+      event.preventDefault();
+      const nodeData = node.data as { label?: string } | undefined;
+      setContextMenu({
+        nodeId: node.id,
+        nodeLabel: (nodeData?.label as string) ?? node.id,
+        x: event.clientX,
+        y: event.clientY,
+      });
+    },
+    [isLocked]
+  );
+
+  const handleContextMenuClose = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleNodeRename = useCallback(
+    (nodeId: string, newLabel: string) => {
+      if (!graphRef.current || isLocked) return;
+      const updatedGraph: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: graphRef.current.nodes.map((n) =>
+          n.id === nodeId ? { ...n, label: newLabel } : n
+        ),
+      };
+      syncGraphToCode(updatedGraph);
+      // Also update React Flow nodes for immediate visual feedback
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === nodeId
+            ? { ...n, data: { ...n.data, label: newLabel } }
+            : n
+        )
+      );
+    },
+    [isLocked, syncGraphToCode]
+  );
+
+  const handleNodeDelete = useCallback(
+    (nodeId: string) => {
+      if (!graphRef.current || isLocked) return;
+      const updatedGraph: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: graphRef.current.nodes.filter((n) => n.id !== nodeId),
+        edges: graphRef.current.edges.filter(
+          (e) => e.source !== nodeId && e.target !== nodeId
+        ),
+      };
+      syncGraphToCode(updatedGraph);
+      // Update React Flow state immediately
+      setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+      setEdges((prev) =>
+        prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
+      );
+    },
+    [isLocked, syncGraphToCode]
+  );
+
+  const handleNodeChangeShape = useCallback(
+    (nodeId: string, newType: MermaidNodeType) => {
+      if (!graphRef.current || isLocked) return;
+      const updatedGraph: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: graphRef.current.nodes.map((n) =>
+          n.id === nodeId ? { ...n, type: newType } : n
+        ),
+      };
+      syncGraphToCode(updatedGraph);
+      // Update React Flow nodes for immediate visual feedback
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === nodeId
+            ? { ...n, type: newType, data: { ...n.data, mermaidType: newType } }
+            : n
+        )
+      );
+    },
+    [isLocked, syncGraphToCode]
+  );
+
+  // Close context menu on pane click
+  const onPaneClick = useCallback(() => {
+    setContextMenu(null);
+  }, []);
 
   return (
     <div className="h-full w-full relative">
@@ -142,7 +284,10 @@ export function VisualCanvas() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeContextMenu={onNodeContextMenu}
+        onPaneClick={onPaneClick}
         nodeTypes={customNodeTypes}
+        edgeTypes={customEdgeTypes}
         fitView
         nodesDraggable={!isLocked}
         nodesConnectable={false}
@@ -157,6 +302,18 @@ export function VisualCanvas() {
           maskColor="rgba(0,0,0,0.1)"
         />
       </ReactFlow>
+      {contextMenu && !isLocked && (
+        <NodeContextMenu
+          nodeId={contextMenu.nodeId}
+          nodeLabel={contextMenu.nodeLabel}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onRename={handleNodeRename}
+          onDelete={handleNodeDelete}
+          onChangeShape={handleNodeChangeShape}
+          onClose={handleContextMenuClose}
+        />
+      )}
     </div>
   );
 }
