@@ -73,6 +73,12 @@ export function MermaidPreview() {
   // Section toggle state
   const [sections, setSections] = useState<SubgraphSection[]>([]);
   const [sectionPanelOpen, setSectionPanelOpen] = useState(false);
+  const sectionsRef = useRef<SubgraphSection[]>([]);
+
+  // Keep sectionsRef in sync with sections state so async callbacks can read latest value
+  useEffect(() => {
+    sectionsRef.current = sections;
+  }, [sections]);
 
   // Parse subgraphs whenever code changes
   const parsedSections = useMemo(() => parseSubgraphs(code), [code]);
@@ -86,39 +92,47 @@ export function MermaidPreview() {
     });
   }, [parsedSections]);
 
-  // Apply section visibility to SVG
+  // Apply section visibility to the SVG DOM
+  const applySectionVisibility = useCallback(
+    (targetSections: SubgraphSection[]) => {
+      if (!containerRef.current) return;
+      const svgEl = containerRef.current.querySelector("svg");
+      if (!svgEl) return;
+
+      for (const section of targetSections) {
+        const groups = svgEl.querySelectorAll<SVGGElement>("g.cluster");
+        for (const g of groups) {
+          const gId = g.getAttribute("id") ?? "";
+          const labelEl = g.querySelector(".cluster-label, .nodeLabel");
+          const labelText = labelEl?.textContent?.trim() ?? "";
+          if (
+            gId.includes(section.id) ||
+            labelText === section.label ||
+            labelText === section.id
+          ) {
+            g.style.display = section.visible ? "" : "none";
+          }
+        }
+
+        // Also hide individual nodes within hidden subgraphs by matching ids
+        const escapedId = CSS.escape(section.id);
+        const nodeGroups = svgEl.querySelectorAll<SVGGElement>(
+          `g[id*="${escapedId}"]`
+        );
+        for (const ng of nodeGroups) {
+          if (!ng.classList.contains("cluster")) {
+            ng.style.display = section.visible ? "" : "none";
+          }
+        }
+      }
+    },
+    []
+  );
+
+  // Re-apply section visibility whenever sections state changes
   useEffect(() => {
-    if (!containerRef.current) return;
-    const svgEl = containerRef.current.querySelector("svg");
-    if (!svgEl) return;
-
-    for (const section of sections) {
-      // Mermaid renders subgraphs as <g> with class "cluster" and an id containing the subgraph id
-      const groups = svgEl.querySelectorAll<SVGGElement>("g.cluster");
-      for (const g of groups) {
-        const gId = g.getAttribute("id") ?? "";
-        const labelEl = g.querySelector(".cluster-label, .nodeLabel");
-        const labelText = labelEl?.textContent?.trim() ?? "";
-        if (
-          gId.includes(section.id) ||
-          labelText === section.label ||
-          labelText === section.id
-        ) {
-          g.style.display = section.visible ? "" : "none";
-        }
-      }
-
-      // Also hide individual nodes within hidden subgraphs by matching ids
-      const nodeGroups = svgEl.querySelectorAll<SVGGElement>(
-        `g[id*="${section.id}"]`
-      );
-      for (const ng of nodeGroups) {
-        if (!ng.classList.contains("cluster")) {
-          ng.style.display = section.visible ? "" : "none";
-        }
-      }
-    }
-  }, [sections]);
+    applySectionVisibility(sections);
+  }, [sections, applySectionVisibility]);
 
   // Mermaid render effect
   useEffect(() => {
@@ -158,6 +172,8 @@ export function MermaidPreview() {
 
         if (containerRef.current && generation === generationRef.current) {
           containerRef.current.innerHTML = clean;
+          // Re-apply section visibility to the newly rendered SVG
+          applySectionVisibility(sectionsRef.current);
           setParseError(null);
           setError(null);
         }
@@ -171,7 +187,7 @@ export function MermaidPreview() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [code, setError]);
+  }, [code, setError, applySectionVisibility]);
 
   // Zoom helpers
   const clampZoom = useCallback((z: number) => {
