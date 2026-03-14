@@ -13,6 +13,9 @@ export interface DiagramListItem {
   title: string;
   folderId: string | null;
   updatedAt: string;
+  isShared?: boolean;
+  permission?: string | null;
+  ownerEmail?: string | null;
 }
 
 export interface Folder {

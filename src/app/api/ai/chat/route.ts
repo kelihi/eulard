@@ -13,30 +13,31 @@ import {
   exportDiagramSchema,
 } from "@/lib/ai/tools";
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
+import { getRequiredUser } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 function getApiKey(): string | null {
-  // Check env var first, then settings file
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
-
-  const settingsPath = path.join(process.cwd(), "data", "settings.json");
-  try {
-    const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-    return settings.anthropicApiKey || null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export async function POST(request: Request) {
+  const log = logger.apiRequest("POST", "/api/ai/chat");
+  const user = await getRequiredUser();
+  if (!user) {
+    log.done(401, "unauthorized");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = getApiKey();
   if (!apiKey) {
+    log.done(401, "no API key configured", { userId: user.id });
     return NextResponse.json(
-      { error: "No API key configured. Go to Settings to add your Anthropic API key." },
+      { error: "No API key configured. Set ANTHROPIC_API_KEY environment variable." },
       { status: 401 }
     );
   }
+  log.done(200, "streaming AI response", { userId: user.id });
 
   const { messages, currentCode } = await request.json();
 
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
         parameters: exportDiagramSchema,
       }),
     },
-    maxSteps: 5,
+    maxSteps: 15,
   });
 
   return result.toDataStreamResponse();

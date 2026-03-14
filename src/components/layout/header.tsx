@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useSession, signOut } from "next-auth/react";
 import { useDiagramStore } from "@/stores/diagram-store";
-import { Save, MessageSquare, Settings } from "lucide-react";
+import { Save, MessageSquare, Settings, Share2, LogOut, Shield, User } from "lucide-react";
 import { Toolbar } from "@/components/editor/toolbar";
 import { SettingsModal } from "./settings-modal";
+import { ShareModal } from "@/components/editor/share-modal";
 
 interface HeaderProps {
   onToggleChat: () => void;
@@ -12,15 +14,22 @@ interface HeaderProps {
 }
 
 export function Header({ onToggleChat, chatOpen }: HeaderProps) {
+  const { data: session } = useSession();
   const title = useDiagramStore((s) => s.diagram?.title ?? "");
   const isDirty = useDiagramStore((s) => s.isDirty);
   const syncState = useDiagramStore((s) => s.syncState);
   const setTitle = useDiagramStore((s) => s.setTitle);
   const saveDiagram = useDiagramStore((s) => s.saveDiagram);
+  const diagramId = useDiagramStore((s) => s.diagram?.id);
 
   const [isEditing, setIsEditing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const isAdmin = (session?.user as { role?: string })?.role === "admin";
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -28,6 +37,16 @@ export function Header({ onToggleChat, chatOpen }: HeaderProps) {
       inputRef.current.select();
     }
   }, [isEditing]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleSave = () => {
     saveDiagram();
@@ -76,6 +95,14 @@ export function Header({ onToggleChat, chatOpen }: HeaderProps) {
         <Toolbar />
 
         <button
+          onClick={() => diagramId && setShareOpen(true)}
+          className="p-1.5 rounded hover:bg-[var(--muted)] transition-all"
+          title="Share"
+        >
+          <Share2 className="w-4 h-4" />
+        </button>
+
+        <button
           onClick={handleSave}
           disabled={!isDirty}
           className="p-1.5 rounded hover:bg-[var(--muted)] disabled:opacity-30 transition-all"
@@ -103,9 +130,53 @@ export function Header({ onToggleChat, chatOpen }: HeaderProps) {
         >
           <MessageSquare className="w-4 h-4" />
         </button>
+
+        {/* User menu */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            className="p-1.5 rounded hover:bg-[var(--muted)] transition-all"
+            title={session?.user?.email || "Account"}
+          >
+            <User className="w-4 h-4" />
+          </button>
+
+          {userMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-56 bg-[var(--background)] border border-[var(--border)] rounded-lg shadow-lg z-50 py-1">
+              <div className="px-3 py-2 border-b border-[var(--border)]">
+                <p className="text-sm font-medium truncate">{session?.user?.name || session?.user?.email}</p>
+                <p className="text-xs text-[var(--muted-foreground)] truncate">{session?.user?.email}</p>
+              </div>
+              {isAdmin && (
+                <a
+                  href="/admin"
+                  className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-[var(--muted)] transition-colors"
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  Admin Panel
+                </a>
+              )}
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-[var(--muted)] transition-colors text-left"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      {diagramId && (
+        <ShareModal
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          diagramId={diagramId}
+          isOwner={true}
+        />
+      )}
     </>
   );
 }

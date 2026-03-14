@@ -8,8 +8,12 @@ export default function Home() {
 
   useEffect(() => {
     async function init() {
+      // Initialize database on first load
+      await fetch("/api/init").catch(() => {});
+
       // Check for existing diagrams first
       const listRes = await fetch("/api/diagrams");
+      if (!listRes.ok) return; // Will redirect to login via middleware
       const diagrams = await listRes.json();
 
       if (diagrams.length > 0) {
