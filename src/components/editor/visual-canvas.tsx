@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useMemo } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -28,8 +28,8 @@ export function VisualCanvas() {
   const setCode = useDiagramStore((s) => s.setCode);
   const syncState = useDiagramStore((s) => s.syncState);
 
-  const nodesRef = useRef<Node[]>([]);
-  const edgesRef = useRef<Edge[]>([]);
+  const [nodes, setNodes] = useState<Node[]>([]);
+  const [edges, setEdges] = useState<Edge[]>([]);
   const graphRef = useRef<FlowchartGraph | null>(null);
   const generationRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -71,24 +71,13 @@ export function VisualCanvas() {
       }
 
       graphRef.current = layoutGraph;
-      const { nodes, edges } = graphToReactFlow(layoutGraph);
-      nodesRef.current = nodes;
-      edgesRef.current = edges;
-
-      // Force re-render
-      generationRef.current++;
+      const { nodes: newNodes, edges: newEdges } = graphToReactFlow(layoutGraph);
+      setNodes(newNodes);
+      setEdges(newEdges);
     }, 400);
 
     return () => clearTimeout(timer);
   }, [code]);
-
-  // Derive nodes/edges for render
-  const { rfNodes, rfEdges } = useMemo(() => {
-    // Read generationRef to trigger re-computation
-    void generationRef.current;
-    return { rfNodes: nodesRef.current, rfEdges: edgesRef.current };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [generationRef.current, code]);
 
   const isLocked = syncState === "ai-streaming";
 
@@ -106,23 +95,27 @@ export function VisualCanvas() {
 
       if (hasDragStart) isDraggingRef.current = true;
 
-      nodesRef.current = applyNodeChanges(changes, nodesRef.current);
+      setNodes((prevNodes) => {
+        const updatedNodes = applyNodeChanges(changes, prevNodes);
 
-      if (hasDragEnd) {
-        isDraggingRef.current = false;
+        if (hasDragEnd) {
+          isDraggingRef.current = false;
 
-        // Sync positions back to code
-        if (graphRef.current) {
-          const updatedGraph = updateGraphPositions(
-            graphRef.current,
-            nodesRef.current
-          );
-          graphRef.current = updatedGraph;
-          const newCode = graphToMermaid(updatedGraph);
-          codeFromCanvasRef.current = newCode;
-          setCode(newCode);
+          // Sync positions back to code
+          if (graphRef.current) {
+            const updatedGraph = updateGraphPositions(
+              graphRef.current,
+              updatedNodes
+            );
+            graphRef.current = updatedGraph;
+            const newCode = graphToMermaid(updatedGraph);
+            codeFromCanvasRef.current = newCode;
+            setCode(newCode);
+          }
         }
-      }
+
+        return updatedNodes;
+      });
     },
     [isLocked, setCode]
   );
@@ -130,7 +123,7 @@ export function VisualCanvas() {
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
       if (isLocked) return;
-      edgesRef.current = applyEdgeChanges(changes, edgesRef.current);
+      setEdges((prevEdges) => applyEdgeChanges(changes, prevEdges));
     },
     [isLocked]
   );
@@ -145,8 +138,8 @@ export function VisualCanvas() {
         </div>
       )}
       <ReactFlow
-        nodes={rfNodes}
-        edges={rfEdges}
+        nodes={nodes}
+        edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         nodeTypes={customNodeTypes}
