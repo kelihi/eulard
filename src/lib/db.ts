@@ -11,7 +11,7 @@ function getDb() {
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
-    _db = new Database(path.join(dataDir, "vizmerm.db"));
+    _db = new Database(path.join(dataDir, "eulard.db"));
     _db.pragma("journal_mode = WAL");
 
     _db.exec(`
@@ -31,37 +31,76 @@ function getDb() {
     if (!cols.some((c) => c.name === "positions")) {
       _db.exec("ALTER TABLE diagrams ADD COLUMN positions TEXT");
     }
+
+    // Folders table
+    _db.exec(`
+      CREATE TABLE IF NOT EXISTS folders (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT 'New Folder',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+
+    // Migration: add folder_id column if missing
+    if (!cols.some((c) => c.name === "folder_id")) {
+      _db.exec("ALTER TABLE diagrams ADD COLUMN folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL");
+    }
   }
   return _db;
 }
 
+// --- Folders ---
+
+export function listFolders() {
+  return getDb()
+    .prepare("SELECT id, name, created_at as createdAt, updated_at as updatedAt FROM folders ORDER BY name ASC")
+    .all();
+}
+
+export function createFolder(id: string, name: string) {
+  getDb().prepare("INSERT INTO folders (id, name) VALUES (?, ?)").run(id, name);
+  return { id, name };
+}
+
+export function updateFolder(id: string, name: string) {
+  getDb().prepare("UPDATE folders SET name = ?, updated_at = datetime('now') WHERE id = ?").run(name, id);
+}
+
+export function deleteFolder(id: string) {
+  // Diagrams in this folder become uncategorized (folder_id set to NULL via ON DELETE SET NULL)
+  getDb().prepare("DELETE FROM folders WHERE id = ?").run(id);
+}
+
+// --- Diagrams ---
+
 export function listDiagrams() {
   return getDb()
-    .prepare("SELECT id, title, updated_at as updatedAt FROM diagrams ORDER BY updated_at DESC")
+    .prepare("SELECT id, title, folder_id as folderId, updated_at as updatedAt FROM diagrams ORDER BY updated_at DESC")
     .all();
 }
 
 export function getDiagram(id: string) {
   return getDb()
     .prepare(
-      "SELECT id, title, code, positions, created_at as createdAt, updated_at as updatedAt FROM diagrams WHERE id = ?"
+      "SELECT id, title, code, positions, folder_id as folderId, created_at as createdAt, updated_at as updatedAt FROM diagrams WHERE id = ?"
     )
     .get(id);
 }
 
-export function createDiagram(id: string, title: string, code: string) {
+export function createDiagram(id: string, title: string, code: string, folderId?: string) {
   getDb().prepare(
-    "INSERT INTO diagrams (id, title, code) VALUES (?, ?, ?)"
-  ).run(id, title, code);
+    "INSERT INTO diagrams (id, title, code, folder_id) VALUES (?, ?, ?, ?)"
+  ).run(id, title, code, folderId ?? null);
   return getDiagram(id);
 }
 
 export function updateDiagram(
   id: string,
-  data: { title?: string; code?: string; positions?: string }
+  data: { title?: string; code?: string; positions?: string; folderId?: string | null }
 ) {
   const fields: string[] = [];
-  const values: (string | undefined)[] = [];
+  const values: (string | null | undefined)[] = [];
 
   if (data.title !== undefined) {
     fields.push("title = ?");
@@ -74,6 +113,10 @@ export function updateDiagram(
   if (data.positions !== undefined) {
     fields.push("positions = ?");
     values.push(data.positions);
+  }
+  if (data.folderId !== undefined) {
+    fields.push("folder_id = ?");
+    values.push(data.folderId);
   }
 
   if (fields.length === 0) return getDiagram(id);

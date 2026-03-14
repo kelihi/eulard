@@ -52,8 +52,8 @@ export default function EditorPage() {
           <div className="flex-1 flex">
             <div className="flex-1 bg-[var(--muted)] p-4">
               <div className="space-y-2">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-4 bg-[var(--border)] rounded animate-pulse" style={{ width: `${60 + Math.random() * 30}%` }} />
+                {[85, 70, 90, 60, 75].map((w, i) => (
+                  <div key={i} className="h-4 bg-[var(--border)] rounded animate-pulse" style={{ width: `${w}%` }} />
                 ))}
               </div>
             </div>

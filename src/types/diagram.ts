@@ -3,6 +3,7 @@ export interface DiagramState {
   title: string;
   code: string;
   positions: string | null;
+  folderId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -10,5 +11,11 @@ export interface DiagramState {
 export interface DiagramListItem {
   id: string;
   title: string;
+  folderId: string | null;
   updatedAt: string;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
 }

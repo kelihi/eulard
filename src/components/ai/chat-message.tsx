@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import Markdown from "react-markdown";
 
 interface ChatMessageProps {
   role: "user" | "assistant";
@@ -19,10 +20,10 @@ export function ChatMessage({ role, content, isStreaming }: ChatMessageProps) {
       )}
     >
       <div className="font-medium text-xs text-[var(--muted-foreground)] mb-1">
-        {role === "user" ? "You" : "VizMerm AI"}
+        {role === "user" ? "You" : "Eulard AI"}
       </div>
-      <div className="whitespace-pre-wrap leading-relaxed">
-        {content}
+      <div className="leading-relaxed chat-markdown">
+        <Markdown>{content}</Markdown>
         {isStreaming && (
           <span className="inline-block w-2 h-4 bg-[var(--primary)] animate-pulse ml-0.5" />
         )}

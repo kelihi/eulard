@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "VizMerm - Vibe Code Mermaid Diagrams",
+  title: "Eulard - Vibe Code Mermaid Diagrams",
   description:
     "Create and edit mermaid diagrams with AI assistance and live preview",
 };

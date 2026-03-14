@@ -15,6 +15,7 @@ const createSchema = z.object({
     .max(50000)
     .optional()
     .default("flowchart TB\n    A[Start] --> B[End]"),
+  folderId: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -26,6 +27,6 @@ export async function POST(request: Request) {
   }
 
   const id = generateId();
-  const diagram = createDiagram(id, parsed.data.title, parsed.data.code);
+  const diagram = createDiagram(id, parsed.data.title, parsed.data.code, parsed.data.folderId);
   return NextResponse.json(diagram, { status: 201 });
 }

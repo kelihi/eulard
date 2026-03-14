@@ -7,8 +7,18 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    // Create a new diagram and redirect to it
     async function init() {
+      // Check for existing diagrams first
+      const listRes = await fetch("/api/diagrams");
+      const diagrams = await listRes.json();
+
+      if (diagrams.length > 0) {
+        // Redirect to most recent diagram
+        router.replace(`/editor/${diagrams[0].id}`);
+        return;
+      }
+
+      // No diagrams exist — create one
       const res = await fetch("/api/diagrams", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -23,10 +33,8 @@ export default function Home() {
   return (
     <div className="h-screen flex items-center justify-center">
       <div className="text-center">
-        <h1 className="text-2xl font-bold mb-2">VizMerm</h1>
-        <p className="text-[var(--muted-foreground)]">
-          Creating your first diagram...
-        </p>
+        <h1 className="text-2xl font-bold mb-2">Eulard</h1>
+        <p className="text-[var(--muted-foreground)]">Loading...</p>
       </div>
     </div>
   );
