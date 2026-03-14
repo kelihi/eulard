@@ -36,7 +36,7 @@ export async function GET(
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   code: z.string().max(50000).optional(),
-  positions: z.string().max(100000).optional(),
+  positions: z.string().max(100000).nullable().optional(),
   folderId: z.string().nullable().optional(),
 });
 
@@ -69,7 +69,7 @@ export async function PUT(
     const parsed = updateSchema.safeParse(body);
 
     if (!parsed.success) {
-      log.done(400, "validation error");
+      log.done(400, "validation error", { error: parsed.error.message });
       return NextResponse.json({ error: parsed.error.message }, { status: 400 });
     }
 
