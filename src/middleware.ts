@@ -20,6 +20,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/editor/:path*",
     "/admin/:path*",
     "/api/diagrams/:path*",
