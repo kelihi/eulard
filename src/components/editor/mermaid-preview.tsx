@@ -11,7 +11,7 @@ async function getMermaid() {
     mermaidInstance = await import("mermaid");
     mermaidInstance.default.initialize({
       startOnLoad: false,
-      securityLevel: "strict",
+      securityLevel: "loose",
       theme: "default",
       flowchart: {
         htmlLabels: true,
@@ -50,8 +50,17 @@ export function MermaidPreview() {
         // Sanitize SVG — DOMPurify loaded dynamically (client-only)
         const DOMPurify = (await import("dompurify")).default;
         const clean = DOMPurify.sanitize(svg, {
-          USE_PROFILES: { svg: true, svgFilters: true },
-          FORBID_ATTR: ["onclick", "onload", "onerror", "onmouseover"],
+          USE_PROFILES: { svg: true, svgFilters: true, html: true },
+          ADD_TAGS: ["foreignObject", "style"],
+          FORBID_TAGS: ["script", "iframe"],
+          FORBID_ATTR: [
+            "onclick",
+            "onload",
+            "onerror",
+            "onmouseover",
+            "onfocus",
+            "onblur",
+          ],
         });
 
         if (containerRef.current && generation === generationRef.current) {
