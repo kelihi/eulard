@@ -268,7 +268,7 @@ export async function createDiagram(
 
 export async function updateDiagram(
   id: string,
-  data: { title?: string; code?: string; positions?: string; folderId?: string | null }
+  data: { title?: string; code?: string; positions?: string | null; folderId?: string | null }
 ) {
   const fields: string[] = [];
   const values: unknown[] = [];
