@@ -13,14 +13,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        const email = credentials?.email as string | undefined;
+        const rawEmail = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
 
-        if (!email || !password) {
+        if (!rawEmail || !password) {
           logger.warn("login attempt with missing credentials");
           return null;
         }
 
+        const email = rawEmail.toLowerCase().trim();
         const user = await getUserByEmail(email);
         if (!user) {
           logger.warn("login attempt for unknown email", { path: "/api/auth", method: "POST" });

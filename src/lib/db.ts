@@ -118,8 +118,8 @@ export interface UserRow {
 
 export async function getUserByEmail(email: string) {
   return queryOne<UserRow>(
-    "SELECT id, email, name, password_hash, role, created_at, updated_at FROM users WHERE email = $1",
-    [email]
+    "SELECT id, email, name, password_hash, role, created_at, updated_at FROM users WHERE LOWER(email) = LOWER($1)",
+    [email.toLowerCase().trim()]
   );
 }
 
@@ -137,9 +137,10 @@ export async function createUser(
   passwordHash: string,
   role: string = "user"
 ) {
+  const normalizedEmail = email.toLowerCase().trim();
   await query(
     "INSERT INTO users (id, email, name, password_hash, role) VALUES ($1, $2, $3, $4, $5)",
-    [id, email, name, passwordHash, role]
+    [id, normalizedEmail, name, passwordHash, role]
   );
   return getUserById(id);
 }
