@@ -4,13 +4,17 @@ import type { FlowchartGraph } from "@/types/graph";
 export interface FlowNodeData {
   label: string;
   mermaidType: string;
+  onRenameNode?: (nodeId: string, newLabel: string) => void;
   [key: string]: unknown;
 }
 
 /**
  * Convert a flowchart graph to React Flow nodes and edges.
  */
-export function graphToReactFlow(graph: FlowchartGraph): {
+export function graphToReactFlow(
+  graph: FlowchartGraph,
+  onRenameNode?: (nodeId: string, newLabel: string) => void
+): {
   nodes: Node<FlowNodeData>[];
   edges: Edge[];
 } {
@@ -21,6 +25,7 @@ export function graphToReactFlow(graph: FlowchartGraph): {
     data: {
       label: n.label,
       mermaidType: n.type,
+      onRenameNode,
     },
   }));
 
