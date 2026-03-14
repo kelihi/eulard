@@ -89,7 +89,7 @@ function DefaultNode({ data }: NodeProps) {
   return (
     <div className="px-4 py-2 rounded border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center">
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} />
+      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
     </div>
   );
@@ -109,7 +109,7 @@ function DecisionNode({ data }: NodeProps) {
         />
       </svg>
       <span className="relative z-10 text-sm font-medium text-center px-4">
-        <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} />
+        <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       </span>
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
     </div>
@@ -121,7 +121,7 @@ function StadiumNode({ data }: NodeProps) {
   return (
     <div className="px-4 py-2 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center">
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} />
+      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
     </div>
   );
@@ -132,7 +132,7 @@ function SubroutineNode({ data }: NodeProps) {
   return (
     <div className="px-4 py-2 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center border-double border-4">
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} />
+      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
     </div>
   );
@@ -144,7 +144,7 @@ function CylinderNode({ data }: NodeProps) {
     <div className="relative flex items-center justify-center" style={{ minWidth: 80, minHeight: 60 }}>
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <div className="px-4 py-3 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%]">
-        <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} />
+        <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       </div>
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
     </div>
@@ -156,7 +156,7 @@ function CircleNode({ data }: NodeProps) {
   return (
     <div className="w-16 h-16 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm flex items-center justify-center text-center">
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} />
+      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
     </div>
   );

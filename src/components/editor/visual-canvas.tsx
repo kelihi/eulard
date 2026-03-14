@@ -45,6 +45,8 @@ export function VisualCanvas() {
   const isDraggingRef = useRef(false);
   const codeFromCanvasRef = useRef<string | null>(null);
 
+  const isLocked = syncState === "ai-streaming";
+
   // Rename node callback — passed into custom nodes via data
   const onRenameNode = useCallback(
     (nodeId: string, newLabel: string) => {
@@ -123,15 +125,13 @@ export function VisualCanvas() {
       }
 
       graphRef.current = layoutGraph;
-      const { nodes: newNodes, edges: newEdges } = graphToReactFlow(layoutGraph, onRenameNode);
+      const { nodes: newNodes, edges: newEdges } = graphToReactFlow(layoutGraph, onRenameNode, isLocked);
       setNodes(newNodes);
       setEdges(newEdges);
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [code, positions, onRenameNode]);
-
-  const isLocked = syncState === "ai-streaming";
+  }, [code, positions, onRenameNode, isLocked]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {

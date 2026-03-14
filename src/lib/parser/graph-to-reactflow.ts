@@ -5,6 +5,7 @@ export interface FlowNodeData {
   label: string;
   mermaidType: string;
   onRenameNode?: (nodeId: string, newLabel: string) => void;
+  isLocked?: boolean;
   [key: string]: unknown;
 }
 
@@ -13,7 +14,8 @@ export interface FlowNodeData {
  */
 export function graphToReactFlow(
   graph: FlowchartGraph,
-  onRenameNode?: (nodeId: string, newLabel: string) => void
+  onRenameNode?: (nodeId: string, newLabel: string) => void,
+  isLocked?: boolean
 ): {
   nodes: Node<FlowNodeData>[];
   edges: Edge[];
@@ -26,6 +28,7 @@ export function graphToReactFlow(
       label: n.label,
       mermaidType: n.type,
       onRenameNode,
+      isLocked,
     },
   }));
 
