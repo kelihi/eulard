@@ -63,6 +63,15 @@ export function VisualCanvas() {
       const newCode = graphToMermaid(updatedGraph);
       codeFromCanvasRef.current = newCode;
       setCode(newCode);
+
+      // Update React Flow nodes directly so the label updates visually
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === nodeId
+            ? { ...n, data: { ...n.data, label: newLabel } }
+            : n
+        )
+      );
     },
     [setCode]
   );
