@@ -52,6 +52,7 @@ export function MermaidPreview() {
         const clean = DOMPurify.sanitize(svg, {
           USE_PROFILES: { svg: true, svgFilters: true, html: true },
           ADD_TAGS: ["foreignObject", "style"],
+          HTML_INTEGRATION_POINTS: { foreignobject: true },
           FORBID_TAGS: ["script", "iframe"],
           FORBID_ATTR: [
             "onclick",
