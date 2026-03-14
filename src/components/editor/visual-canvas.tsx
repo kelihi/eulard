@@ -71,6 +71,14 @@ export function VisualCanvas() {
         ),
       };
       syncGraphToCode(updatedGraph);
+      // Also update React Flow edges for immediate visual feedback
+      setEdges((prev) =>
+        prev.map((e) =>
+          e.id === edgeId
+            ? { ...e, data: { ...e.data, edgeLabel: newLabel } }
+            : e
+        )
+      );
     },
     [isLocked, syncGraphToCode]
   );
