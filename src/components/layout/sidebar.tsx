@@ -13,6 +13,7 @@ import {
   FolderPlus,
   Pencil,
   ChevronRight,
+  Users,
 } from "lucide-react";
 
 export function Sidebar() {
@@ -34,6 +35,7 @@ export function Sidebar() {
   const [editingName, setEditingName] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
+  const [sharedExpanded, setSharedExpanded] = useState(true);
 
   useEffect(() => {
     loadDiagrams();
@@ -117,15 +119,18 @@ export function Sidebar() {
     }
   };
 
-  const uncategorized = diagrams.filter((d) => !d.folderId);
+  // Separate owned vs shared diagrams
+  const ownedDiagrams = diagrams.filter((d) => !d.isShared);
+  const sharedDiagrams = diagrams.filter((d) => d.isShared);
+  const uncategorized = ownedDiagrams.filter((d) => !d.folderId);
   const diagramsByFolder = (folderId: string) =>
-    diagrams.filter((d) => d.folderId === folderId);
+    ownedDiagrams.filter((d) => d.folderId === folderId);
 
-  const renderDiagram = (d: typeof diagrams[0]) => (
+  const renderDiagram = (d: typeof diagrams[0], isShared = false) => (
     <div
       key={d.id}
-      draggable
-      onDragStart={(e) => handleDragStart(e, d.id)}
+      draggable={!isShared}
+      onDragStart={!isShared ? (e) => handleDragStart(e, d.id) : undefined}
       onClick={() => router.push(`/editor/${d.id}`)}
       className={cn(
         "flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-sm group transition-colors",
@@ -136,12 +141,19 @@ export function Sidebar() {
     >
       <FileText className="w-3.5 h-3.5 text-[var(--muted-foreground)] shrink-0" />
       <span className="truncate flex-1">{d.title}</span>
-      <button
-        onClick={(e) => handleDelete(e, d.id)}
-        className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)] transition-all"
-      >
-        <Trash2 className="w-3 h-3" />
-      </button>
+      {isShared && (
+        <span className="text-[10px] text-[var(--muted-foreground)] px-1 py-0.5 bg-[var(--muted)] rounded">
+          {d.permission}
+        </span>
+      )}
+      {!isShared && (
+        <button
+          onClick={(e) => handleDelete(e, d.id)}
+          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)] transition-all"
+        >
+          <Trash2 className="w-3 h-3" />
+        </button>
+      )}
     </div>
   );
 
@@ -261,7 +273,7 @@ export function Sidebar() {
                       Empty folder
                     </p>
                   ) : (
-                    folderDiagrams.map(renderDiagram)
+                    folderDiagrams.map((d) => renderDiagram(d))
                   )}
                 </div>
               )}
@@ -291,13 +303,42 @@ export function Sidebar() {
           onDragLeave={folders.length > 0 ? handleDragLeave : undefined}
           onDrop={folders.length > 0 ? (e) => handleDrop(e, null) : undefined}
         >
-          {uncategorized.map(renderDiagram)}
+          {uncategorized.map((d) => renderDiagram(d))}
         </div>
 
-        {diagrams.length === 0 && folders.length === 0 && (
+        {ownedDiagrams.length === 0 && folders.length === 0 && sharedDiagrams.length === 0 && (
           <p className="text-xs text-[var(--muted-foreground)] text-center mt-4">
             No diagrams yet
           </p>
+        )}
+
+        {/* Shared with me section */}
+        {sharedDiagrams.length > 0 && (
+          <div className="pt-2 mt-2 border-t border-[var(--border)]">
+            <div
+              onClick={() => setSharedExpanded(!sharedExpanded)}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer text-sm hover:bg-[var(--background)]/50"
+            >
+              <ChevronRight
+                className={cn(
+                  "w-3 h-3 text-[var(--muted-foreground)] transition-transform shrink-0",
+                  sharedExpanded && "rotate-90"
+                )}
+              />
+              <Users className="w-3.5 h-3.5 text-[var(--muted-foreground)] shrink-0" />
+              <span className="text-xs font-medium text-[var(--muted-foreground)]">
+                Shared with me
+              </span>
+              <span className="text-xs text-[var(--muted-foreground)] ml-auto">
+                {sharedDiagrams.length}
+              </span>
+            </div>
+            {sharedExpanded && (
+              <div className="ml-4 mt-0.5 space-y-0.5">
+                {sharedDiagrams.map((d) => renderDiagram(d, true))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -1,19 +1,26 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getDiagram, updateDiagram, deleteDiagram } from "@/lib/db";
+import { getDiagram, updateDiagram, deleteDiagram, canAccessDiagram } from "@/lib/db";
+import { getRequiredUser } from "@/lib/auth";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const diagram = getDiagram(id);
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  if (!diagram) {
+  const { id } = await params;
+  const access = await canAccessDiagram(id, user.id);
+
+  if (!access.access) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json(diagram);
+  const diagram = await getDiagram(id);
+  return NextResponse.json({ ...diagram, permission: access.permission });
 }
 
 const updateSchema = z.object({
@@ -27,11 +34,20 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const existing = getDiagram(id);
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  if (!existing) {
+  const { id } = await params;
+  const access = await canAccessDiagram(id, user.id);
+
+  if (!access.access) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (access.permission === "view") {
+    return NextResponse.json({ error: "View-only access" }, { status: 403 });
   }
 
   const body = await request.json();
@@ -41,7 +57,7 @@ export async function PUT(
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  const diagram = updateDiagram(id, parsed.data);
+  const diagram = await updateDiagram(id, parsed.data);
   return NextResponse.json(diagram);
 }
 
@@ -49,7 +65,18 @@ export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { id } = await params;
-  deleteDiagram(id);
+  const diagram = await getDiagram(id);
+
+  if (!diagram || diagram.userId !== user.id) {
+    return NextResponse.json({ error: "Not found or not owner" }, { status: 404 });
+  }
+
+  await deleteDiagram(id);
   return NextResponse.json({ ok: true });
 }

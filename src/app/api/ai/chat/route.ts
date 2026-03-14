@@ -13,27 +13,23 @@ import {
   exportDiagramSchema,
 } from "@/lib/ai/tools";
 import { NextResponse } from "next/server";
-import path from "path";
-import fs from "fs";
+import { getRequiredUser } from "@/lib/auth";
 
 function getApiKey(): string | null {
-  // Check env var first, then settings file
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
-
-  const settingsPath = path.join(process.cwd(), "data", "settings.json");
-  try {
-    const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
-    return settings.anthropicApiKey || null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export async function POST(request: Request) {
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const apiKey = getApiKey();
   if (!apiKey) {
     return NextResponse.json(
-      { error: "No API key configured. Go to Settings to add your Anthropic API key." },
+      { error: "No API key configured. Set ANTHROPIC_API_KEY environment variable." },
       { status: 401 }
     );
   }

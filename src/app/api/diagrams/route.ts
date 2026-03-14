@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listDiagrams, createDiagram } from "@/lib/db";
+import { getRequiredUser } from "@/lib/auth";
 import { generateId } from "@/lib/utils";
 
 export async function GET() {
-  const diagrams = listDiagrams();
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const diagrams = await listDiagrams(user.id);
   return NextResponse.json(diagrams);
 }
 
@@ -19,6 +25,11 @@ const createSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await request.json();
   const parsed = createSchema.safeParse(body);
 
@@ -27,6 +38,12 @@ export async function POST(request: Request) {
   }
 
   const id = generateId();
-  const diagram = createDiagram(id, parsed.data.title, parsed.data.code, parsed.data.folderId);
+  const diagram = await createDiagram(
+    id,
+    parsed.data.title,
+    parsed.data.code,
+    user.id,
+    parsed.data.folderId
+  );
   return NextResponse.json(diagram, { status: 201 });
 }

@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listFolders, createFolder, updateFolder, deleteFolder } from "@/lib/db";
+import { getRequiredUser } from "@/lib/auth";
 import { generateId } from "@/lib/utils";
 
 export async function GET() {
-  const folders = listFolders();
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const folders = await listFolders(user.id);
   return NextResponse.json(folders);
 }
 
@@ -13,6 +19,11 @@ const createSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await request.json();
   const parsed = createSchema.safeParse(body);
 
@@ -21,7 +32,7 @@ export async function POST(request: Request) {
   }
 
   const id = generateId();
-  const folder = createFolder(id, parsed.data.name);
+  const folder = await createFolder(id, parsed.data.name, user.id);
   return NextResponse.json(folder, { status: 201 });
 }
 
@@ -31,6 +42,11 @@ const updateSchema = z.object({
 });
 
 export async function PUT(request: Request) {
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await request.json();
   const parsed = updateSchema.safeParse(body);
 
@@ -38,7 +54,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  updateFolder(parsed.data.id, parsed.data.name);
+  await updateFolder(parsed.data.id, parsed.data.name, user.id);
   return NextResponse.json({ ok: true });
 }
 
@@ -47,6 +63,11 @@ const deleteSchema = z.object({
 });
 
 export async function DELETE(request: Request) {
+  const user = await getRequiredUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const body = await request.json();
   const parsed = deleteSchema.safeParse(body);
 
@@ -54,6 +75,6 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  deleteFolder(parsed.data.id);
+  await deleteFolder(parsed.data.id, user.id);
   return NextResponse.json({ ok: true });
 }
