@@ -6,15 +6,27 @@ let _pool: pg.Pool | null = null;
 
 function getPool(): pg.Pool {
   if (!_pool) {
-    _pool = new Pool({
-      host: process.env.DB_HOST || "127.0.0.1",
-      port: parseInt(process.env.DB_PORT || "5432", 10),
-      database: process.env.DB_NAME || "eulard",
-      user: process.env.DB_USER || "eulard_user",
-      password: process.env.DB_PASSWORD || "",
-      ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
-      max: 10,
-    });
+    // Cloud Run uses Cloud SQL Auth Proxy via Unix socket
+    const instanceConnectionName = process.env.INSTANCE_CONNECTION_NAME;
+    if (instanceConnectionName) {
+      _pool = new Pool({
+        host: `/cloudsql/${instanceConnectionName}`,
+        database: process.env.DB_NAME || "eulard",
+        user: process.env.DB_USER || "eulard_user",
+        password: process.env.DB_PASSWORD || "",
+        max: 10,
+      });
+    } else {
+      _pool = new Pool({
+        host: process.env.DB_HOST || "127.0.0.1",
+        port: parseInt(process.env.DB_PORT || "5432", 10),
+        database: process.env.DB_NAME || "eulard",
+        user: process.env.DB_USER || "eulard_user",
+        password: process.env.DB_PASSWORD || "",
+        ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
+        max: 10,
+      });
+    }
   }
   return _pool;
 }
