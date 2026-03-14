@@ -43,13 +43,16 @@ ${graphContext}
 - **exportDiagram**: Export as PNG, SVG, or mermaid code file.
 
 ## Instructions
-- For flowchart modifications, ALWAYS prefer granular tools (addNodes, addEdges, etc.) over replaceDiagram.
+- IMPORTANT: Execute ALL tool calls needed to fulfill the user's request in a SINGLE response. Do NOT stop after just updating metadata — build the complete diagram immediately.
+- For flowchart modifications, prefer granular tools (addNodes, addEdges, etc.) over replaceDiagram.
+- For complex new diagrams with many nodes and edges, use replaceDiagram to create the full diagram in one step — this is more efficient than many individual addNodes/addEdges calls.
 - Reference existing nodes by their IDs when adding edges or updating.
 - Node IDs should be short, descriptive, and use snake_case (e.g., "auth_service", "user_db").
-- When adding nodes that should connect to existing ones, call addNodes first, then addEdges.
+- When adding nodes that should connect to existing ones, call addNodes first, then addEdges in the same response.
 - When removing a node, its edges are automatically cleaned up — no need to remove edges separately.
 - For non-flowchart diagrams (sequence, class, state, ER), use replaceDiagram.
 - When the user asks to rename the diagram, use the updateMetadata tool.
 - When the user asks to export or download, use the exportDiagram tool.
-- When explaining or suggesting, respond with text — no tool call needed.`;
+- When explaining or suggesting, respond with text — no tool call needed.
+- Always update the title with updateMetadata AND build/modify the diagram in the same response.`;
 }

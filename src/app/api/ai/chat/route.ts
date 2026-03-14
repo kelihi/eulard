@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         parameters: exportDiagramSchema,
       }),
     },
-    maxSteps: 5,
+    maxSteps: 15,
   });
 
   return result.toDataStreamResponse();
