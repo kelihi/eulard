@@ -2,25 +2,35 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDiagram, updateDiagram, deleteDiagram, canAccessDiagram } from "@/lib/db";
 import { getRequiredUser } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getRequiredUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id } = await params;
-  const access = await canAccessDiagram(id, user.id);
+  const log = logger.apiRequest("GET", `/api/diagrams/${id}`);
+  try {
+    const user = await getRequiredUser();
+    if (!user) {
+      log.done(401, "unauthorized");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  if (!access.access) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const access = await canAccessDiagram(id, user.id);
+
+    if (!access.access) {
+      log.done(404, "not found or no access", { userId: user.id });
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const diagram = await getDiagram(id);
+    log.done(200, "fetched diagram", { userId: user.id });
+    return NextResponse.json({ ...diagram, permission: access.permission });
+  } catch (err) {
+    log.fail(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-
-  const diagram = await getDiagram(id);
-  return NextResponse.json({ ...diagram, permission: access.permission });
 }
 
 const updateSchema = z.object({
@@ -34,49 +44,69 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getRequiredUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id } = await params;
-  const access = await canAccessDiagram(id, user.id);
+  const log = logger.apiRequest("PUT", `/api/diagrams/${id}`);
+  try {
+    const user = await getRequiredUser();
+    if (!user) {
+      log.done(401, "unauthorized");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  if (!access.access) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const access = await canAccessDiagram(id, user.id);
+
+    if (!access.access) {
+      log.done(404, "not found or no access", { userId: user.id });
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (access.permission === "view") {
+      log.done(403, "view-only access", { userId: user.id });
+      return NextResponse.json({ error: "View-only access" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const parsed = updateSchema.safeParse(body);
+
+    if (!parsed.success) {
+      log.done(400, "validation error");
+      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    const diagram = await updateDiagram(id, parsed.data);
+    log.done(200, "updated diagram", { userId: user.id });
+    return NextResponse.json(diagram);
+  } catch (err) {
+    log.fail(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-
-  if (access.permission === "view") {
-    return NextResponse.json({ error: "View-only access" }, { status: 403 });
-  }
-
-  const body = await request.json();
-  const parsed = updateSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
-  }
-
-  const diagram = await updateDiagram(id, parsed.data);
-  return NextResponse.json(diagram);
 }
 
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getRequiredUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { id } = await params;
-  const diagram = await getDiagram(id);
+  const log = logger.apiRequest("DELETE", `/api/diagrams/${id}`);
+  try {
+    const user = await getRequiredUser();
+    if (!user) {
+      log.done(401, "unauthorized");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  if (!diagram || diagram.userId !== user.id) {
-    return NextResponse.json({ error: "Not found or not owner" }, { status: 404 });
+    const diagram = await getDiagram(id);
+
+    if (!diagram || diagram.userId !== user.id) {
+      log.done(404, "not found or not owner", { userId: user.id });
+      return NextResponse.json({ error: "Not found or not owner" }, { status: 404 });
+    }
+
+    await deleteDiagram(id);
+    log.done(200, "deleted diagram", { userId: user.id });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    log.fail(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-
-  await deleteDiagram(id);
-  return NextResponse.json({ ok: true });
 }

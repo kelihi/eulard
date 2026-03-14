@@ -3,15 +3,24 @@ import { z } from "zod";
 import { listFolders, createFolder, updateFolder, deleteFolder } from "@/lib/db";
 import { getRequiredUser } from "@/lib/auth";
 import { generateId } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 export async function GET() {
-  const user = await getRequiredUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const log = logger.apiRequest("GET", "/api/folders");
+  try {
+    const user = await getRequiredUser();
+    if (!user) {
+      log.done(401, "unauthorized");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-  const folders = await listFolders(user.id);
-  return NextResponse.json(folders);
+    const folders = await listFolders(user.id);
+    log.done(200, `listed ${folders.length} folders`, { userId: user.id });
+    return NextResponse.json(folders);
+  } catch (err) {
+    log.fail(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
 }
 
 const createSchema = z.object({

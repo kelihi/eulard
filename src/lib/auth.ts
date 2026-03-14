@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { getUserByEmail, getUserById } from "@/lib/db";
+import { logger } from "@/lib/logger";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -15,14 +16,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
 
-        if (!email || !password) return null;
+        if (!email || !password) {
+          logger.warn("login attempt with missing credentials");
+          return null;
+        }
 
         const user = await getUserByEmail(email);
-        if (!user) return null;
+        if (!user) {
+          logger.warn("login attempt for unknown email", { path: "/api/auth", method: "POST" });
+          return null;
+        }
 
         const isValid = await compare(password, user.password_hash);
-        if (!isValid) return null;
+        if (!isValid) {
+          logger.warn("login attempt with wrong password", { userId: user.id, path: "/api/auth", method: "POST" });
+          return null;
+        }
 
+        logger.info("login success", { userId: user.id, path: "/api/auth", method: "POST" });
         return {
           id: user.id,
           email: user.email,

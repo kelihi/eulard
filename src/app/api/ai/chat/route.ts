@@ -14,6 +14,7 @@ import {
 } from "@/lib/ai/tools";
 import { NextResponse } from "next/server";
 import { getRequiredUser } from "@/lib/auth";
+import { logger } from "@/lib/logger";
 
 function getApiKey(): string | null {
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
@@ -21,18 +22,22 @@ function getApiKey(): string | null {
 }
 
 export async function POST(request: Request) {
+  const log = logger.apiRequest("POST", "/api/ai/chat");
   const user = await getRequiredUser();
   if (!user) {
+    log.done(401, "unauthorized");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const apiKey = getApiKey();
   if (!apiKey) {
+    log.done(401, "no API key configured", { userId: user.id });
     return NextResponse.json(
       { error: "No API key configured. Set ANTHROPIC_API_KEY environment variable." },
       { status: 401 }
     );
   }
+  log.done(200, "streaming AI response", { userId: user.id });
 
   const { messages, currentCode } = await request.json();
 

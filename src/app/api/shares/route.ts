@@ -9,6 +9,7 @@ import {
   removeDiagramShare,
 } from "@/lib/db";
 import { generateId } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 const shareSchema = z.object({
   diagramId: z.string(),
@@ -17,8 +18,10 @@ const shareSchema = z.object({
 });
 
 export async function GET(request: Request) {
+  const log = logger.apiRequest("GET", "/api/shares");
   const user = await getRequiredUser();
   if (!user) {
+    log.done(401, "unauthorized");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -35,12 +38,15 @@ export async function GET(request: Request) {
   }
 
   const shares = await listDiagramShares(diagramId);
+  log.done(200, `listed ${shares.length} shares`, { userId: user.id });
   return NextResponse.json(shares);
 }
 
 export async function POST(request: Request) {
+  const log = logger.apiRequest("POST", "/api/shares");
   const user = await getRequiredUser();
   if (!user) {
+    log.done(401, "unauthorized");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -73,6 +79,7 @@ export async function POST(request: Request) {
   );
 
   const shares = await listDiagramShares(parsed.data.diagramId);
+  log.done(201, "shared diagram", { userId: user.id });
   return NextResponse.json(shares, { status: 201 });
 }
 
@@ -82,8 +89,10 @@ const removeSchema = z.object({
 });
 
 export async function DELETE(request: Request) {
+  const log = logger.apiRequest("DELETE", "/api/shares");
   const user = await getRequiredUser();
   if (!user) {
+    log.done(401, "unauthorized");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -100,5 +109,6 @@ export async function DELETE(request: Request) {
   }
 
   await removeDiagramShare(parsed.data.diagramId, parsed.data.userId);
+  log.done(200, "removed share", { userId: user.id });
   return NextResponse.json({ ok: true });
 }
