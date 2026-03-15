@@ -9,7 +9,9 @@ const LOG_LEVEL_ORDER: Record<LogLevel, number> = {
 };
 
 const currentLevel: LogLevel =
-  (process.env.LOG_LEVEL as LogLevel) || "info";
+  LOG_LEVEL_ORDER[process.env.LOG_LEVEL as LogLevel] !== undefined
+    ? (process.env.LOG_LEVEL as LogLevel)
+    : "info";
 
 function shouldLog(level: LogLevel): boolean {
   return LOG_LEVEL_ORDER[level] >= LOG_LEVEL_ORDER[currentLevel];
