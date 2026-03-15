@@ -1,4 +1,5 @@
 import { mermaidToGraph } from "@/lib/parser/mermaid-to-graph";
+import { isConfigured as isFeedbackSystemConfigured } from "@/lib/feedback-system";
 
 export function buildSystemPrompt(currentCode: string): string {
   const graph = mermaidToGraph(currentCode);
@@ -12,6 +13,24 @@ Nodes: ${graph.nodes.map((n) => `${n.id}("${n.label}",${n.type})`).join(", ")}
 Edges: ${graph.edges.map((e) => `${e.source}→${e.target}${e.label ? `[${e.label}]` : ""}(${e.type})`).join(", ")}
 `;
   }
+
+  const clientContextSection = isFeedbackSystemConfigured()
+    ? `
+
+### Client Context (Feedback System Integration)
+- **listClients**: Search and list clients from the feedback system. Returns client names, IDs, and integration details.
+- **getClientContext**: Fetch full details for a specific client, including team members, tools, domains, and integration links (ClickUp folder, Notion page, Slack channels).
+
+Use these tools when the user mentions a client name, asks about client projects, or wants to create a diagram based on client data.
+When a user asks to diagram a client's architecture, workflow, or team structure, first use listClients to find the client, then getClientContext to retrieve the full details, and then build the diagram using that context.
+Client data includes:
+- **ClickUp folder ID**: Links to the client's project management folder
+- **Notion page URL**: Links to the client's documentation
+- **Slack channels**: Internal and external communication channels
+- **Team members**: People assigned to the client
+- **Tools & domains**: Technologies and domains the client works with
+- **Source systems**: Data sources the client uses`
+    : "";
 
   return `You are Eulard AI, an expert assistant for creating and modifying mermaid diagrams.
 
@@ -41,6 +60,7 @@ ${graphContext}
 
 ### Export
 - **exportDiagram**: Export as PNG, SVG, or mermaid code file.
+${clientContextSection}
 
 ## Instructions
 - IMPORTANT: Execute ALL tool calls needed to fulfill the user's request in a SINGLE response. Do NOT stop after just updating metadata — build the complete diagram immediately.
