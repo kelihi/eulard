@@ -123,7 +123,7 @@ export function ChatPanel() {
       onResponse: (response) => {
         // Capture sessionId from response headers
         const newSessionId = response.headers.get("X-Session-Id");
-        if (newSessionId && !sessionId) {
+        if (newSessionId && newSessionId !== sessionId) {
           setSessionId(newSessionId);
         }
         finishFired = false;

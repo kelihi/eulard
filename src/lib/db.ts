@@ -98,6 +98,15 @@ export async function initializeDatabase(): Promise<void> {
   `);
 
   await query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_by TEXT REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS chat_sessions (
       id TEXT PRIMARY KEY,
       diagram_id TEXT NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
@@ -120,7 +129,6 @@ export async function initializeDatabase(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-
   await query("CREATE INDEX IF NOT EXISTS idx_diagrams_user_id ON diagrams(user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_folders_user_id ON folders(user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_diagram_shares_diagram ON diagram_shares(diagram_id)");
@@ -504,6 +512,43 @@ export async function createChatMessage(
       extra?.toolResults ? JSON.stringify(extra.toolResults) : null,
       extra?.tokensUsed ?? null,
     ]
+  );
+}
+
+// --- App Settings ---
+
+export interface AppSettingRow {
+  key: string;
+  value: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export async function getSetting(key: string): Promise<string | null> {
+  const row = await queryOne<AppSettingRow>(
+    "SELECT value FROM app_settings WHERE key = $1",
+    [key]
+  );
+  return row?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string, updatedBy: string): Promise<void> {
+  await query(
+    `INSERT INTO app_settings (key, value, updated_by, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (key)
+     DO UPDATE SET value = $2, updated_by = $3, updated_at = NOW()`,
+    [key, value, updatedBy]
+  );
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  await query("DELETE FROM app_settings WHERE key = $1", [key]);
+}
+
+export async function listSettings(): Promise<AppSettingRow[]> {
+  return query<AppSettingRow>(
+    "SELECT key, value, updated_at, updated_by FROM app_settings ORDER BY key ASC"
   );
 }
 
