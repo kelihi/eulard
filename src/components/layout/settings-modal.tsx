@@ -193,7 +193,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <input
                   type="range"
                   min={1}
-                  max={50}
+                  max={100}
                   value={aiMaxSteps}
                   onChange={(e) => setAIMaxSteps(Number(e.target.value))}
                   className="flex-1 accent-[var(--primary)]"
