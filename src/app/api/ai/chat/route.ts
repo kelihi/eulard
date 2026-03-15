@@ -15,6 +15,15 @@ import {
 import { NextResponse } from "next/server";
 import { getRequiredUser } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { generateId } from "@/lib/utils";
+import {
+  createChatSession,
+  getChatSession,
+  createChatMessage,
+  touchChatSession,
+  updateChatSessionTitle,
+  canAccessDiagram,
+} from "@/lib/db";
 
 function getApiKey(): string | null {
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
@@ -37,11 +46,50 @@ export async function POST(request: Request) {
       { status: 401 }
     );
   }
+
+  const { messages, currentCode, sessionId, diagramId } = await request.json();
+
+  // Resolve or create chat session
+  let resolvedSessionId: string | null = sessionId ?? null;
+
+  if (resolvedSessionId) {
+    const session = await getChatSession(resolvedSessionId);
+    if (!session || session.userId !== user.id) {
+      resolvedSessionId = null;
+    }
+  }
+
+  if (!resolvedSessionId && diagramId) {
+    const access = await canAccessDiagram(diagramId, user.id);
+    if (access.access) {
+      resolvedSessionId = generateId();
+      await createChatSession(resolvedSessionId, diagramId, user.id);
+    }
+  }
+
+  // Persist user message (last message in the array is the new one from the client)
+  const userMessage = messages[messages.length - 1];
+  if (resolvedSessionId && userMessage?.role === "user") {
+    const userContent = typeof userMessage.content === "string"
+      ? userMessage.content
+      : JSON.stringify(userMessage.content);
+    await createChatMessage(generateId(), resolvedSessionId, "user", userContent);
+
+    // Auto-title session from first user message
+    const session = await getChatSession(resolvedSessionId);
+    if (session && !session.title) {
+      const title = userContent.length > 80
+        ? userContent.substring(0, 77) + "..."
+        : userContent;
+      await updateChatSessionTitle(resolvedSessionId, title);
+    }
+  }
+
   log.done(200, "streaming AI response", { userId: user.id });
 
-  const { messages, currentCode } = await request.json();
-
   const anthropic = createAnthropic({ apiKey });
+
+  const capturedSessionId = resolvedSessionId;
 
   const result = streamText({
     model: anthropic("claude-sonnet-4-20250514"),
@@ -95,7 +143,35 @@ export async function POST(request: Request) {
       }),
     },
     maxSteps: 15,
+    onFinish: async ({ text, toolCalls, usage }) => {
+      if (capturedSessionId) {
+        try {
+          await createChatMessage(
+            generateId(),
+            capturedSessionId,
+            "assistant",
+            text || "",
+            {
+              toolCalls: toolCalls && toolCalls.length > 0 ? toolCalls : undefined,
+              tokensUsed: usage?.totalTokens,
+            }
+          );
+          await touchChatSession(capturedSessionId);
+        } catch (err) {
+          logger.error("failed to persist assistant message", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    },
   });
 
-  return result.toDataStreamResponse();
+  const response = result.toDataStreamResponse();
+
+  // Attach sessionId as a response header so the client can track it
+  if (capturedSessionId) {
+    response.headers.set("X-Session-Id", capturedSessionId);
+  }
+
+  return response;
 }
