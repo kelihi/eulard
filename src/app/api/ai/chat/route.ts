@@ -14,6 +14,7 @@ import {
 } from "@/lib/ai/tools";
 import { NextResponse } from "next/server";
 import { getRequiredUser } from "@/lib/auth";
+import { getSetting } from "@/lib/db";
 import { logger } from "@/lib/logger";
 
 function getApiKey(): string | null {
@@ -41,11 +42,18 @@ export async function POST(request: Request) {
 
   const { messages, currentCode } = await request.json();
 
+  // Load custom AI settings from the database
+  const [customPrompt, customModel] = await Promise.all([
+    getSetting("ai_system_prompt"),
+    getSetting("ai_model"),
+  ]);
+
   const anthropic = createAnthropic({ apiKey });
+  const modelId = customModel || "claude-sonnet-4-20250514";
 
   const result = streamText({
-    model: anthropic("claude-sonnet-4-20250514"),
-    system: buildSystemPrompt(currentCode || ""),
+    model: anthropic(modelId),
+    system: buildSystemPrompt(currentCode || "", customPrompt),
     messages,
     tools: {
       addNodes: tool({
