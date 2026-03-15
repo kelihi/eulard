@@ -16,7 +16,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useDiagramStore } from "@/stores/diagram-store";
 import { mermaidToGraph } from "@/lib/parser/mermaid-to-graph";
-import { graphToReactFlow } from "@/lib/parser/graph-to-reactflow";
+import { graphToReactFlow, estimateNodeSize } from "@/lib/parser/graph-to-reactflow";
 import { graphToMermaid } from "@/lib/parser/graph-to-mermaid";
 import { autoLayout } from "@/lib/parser/auto-layout";
 import { updateGraphPositions } from "@/lib/parser/reactflow-to-graph";
@@ -85,11 +85,22 @@ export function VisualCanvas() {
 
       // Update React Flow nodes directly so the label updates visually
       setNodes((prev) =>
-        prev.map((n) =>
-          n.id === nodeId
-            ? { ...n, data: { ...n.data, label: newLabel } }
-            : n
-        )
+        prev.map((n) => {
+          if (n.id !== nodeId) return n;
+          const nodeType = (n.data as { mermaidType?: string }).mermaidType ?? n.type ?? "default";
+          const base = estimateNodeSize(newLabel);
+          let width = base.width;
+          let height = base.height;
+          if (nodeType === "decision") {
+            width = Math.max(120, base.width * 1.6);
+            height = Math.max(80, base.height * 1.6);
+          } else if (nodeType === "circle") {
+            const diameter = Math.max(64, Math.ceil(Math.sqrt(base.width * base.width + base.height * base.height) * 0.75));
+            width = diameter;
+            height = diameter;
+          }
+          return { ...n, width, height, data: { ...n.data, label: newLabel } };
+        })
       );
     },
     [syncGraphToCode]
@@ -282,11 +293,22 @@ export function VisualCanvas() {
       syncGraphToCode(updatedGraph);
       // Also update React Flow nodes for immediate visual feedback
       setNodes((prev) =>
-        prev.map((n) =>
-          n.id === nodeId
-            ? { ...n, data: { ...n.data, label: newLabel } }
-            : n
-        )
+        prev.map((n) => {
+          if (n.id !== nodeId) return n;
+          const nodeType = (n.data as { mermaidType?: string }).mermaidType ?? n.type ?? "default";
+          const base = estimateNodeSize(newLabel);
+          let width = base.width;
+          let height = base.height;
+          if (nodeType === "decision") {
+            width = Math.max(120, base.width * 1.6);
+            height = Math.max(80, base.height * 1.6);
+          } else if (nodeType === "circle") {
+            const diameter = Math.max(64, Math.ceil(Math.sqrt(base.width * base.width + base.height * base.height) * 0.75));
+            width = diameter;
+            height = diameter;
+          }
+          return { ...n, width, height, data: { ...n.data, label: newLabel } };
+        })
       );
     },
     [isLocked, syncGraphToCode]

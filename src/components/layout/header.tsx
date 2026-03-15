@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useDiagramStore } from "@/stores/diagram-store";
-import { Save, MessageSquare, Settings, Share2, LogOut, Shield, User } from "lucide-react";
+import { Save, MessageSquare, Settings, Share2, LogOut, Shield, User, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Toolbar } from "@/components/editor/toolbar";
 import { SettingsModal } from "./settings-modal";
 import { ShareModal } from "@/components/editor/share-modal";
@@ -11,9 +11,11 @@ import { ShareModal } from "@/components/editor/share-modal";
 interface HeaderProps {
   onToggleChat: () => void;
   chatOpen: boolean;
+  onToggleSidebar: () => void;
+  sidebarOpen: boolean;
 }
 
-export function Header({ onToggleChat, chatOpen }: HeaderProps) {
+export function Header({ onToggleChat, chatOpen, onToggleSidebar, sidebarOpen }: HeaderProps) {
   const { data: session } = useSession();
   const title = useDiagramStore((s) => s.diagram?.title ?? "");
   const isDirty = useDiagramStore((s) => s.isDirty);
@@ -55,6 +57,19 @@ export function Header({ onToggleChat, chatOpen }: HeaderProps) {
   return (
     <>
       <div className="h-11 px-4 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--background)] shrink-0">
+        {/* Sidebar toggle */}
+        <button
+          onClick={onToggleSidebar}
+          className="p-1.5 rounded hover:bg-[var(--muted)] transition-all"
+          title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+        >
+          {sidebarOpen ? (
+            <PanelLeftClose className="w-4 h-4" />
+          ) : (
+            <PanelLeftOpen className="w-4 h-4" />
+          )}
+        </button>
+
         {/* Title */}
         {isEditing ? (
           <input

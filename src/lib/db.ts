@@ -101,11 +101,48 @@ export async function initializeDatabase(): Promise<void> {
     )
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_by TEXT REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_sessions (
+      id TEXT PRIMARY KEY,
+      diagram_id TEXT NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+      role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
+      content TEXT NOT NULL DEFAULT '',
+      tool_calls JSONB,
+      tool_results JSONB,
+      tokens_used INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
   await query("CREATE INDEX IF NOT EXISTS idx_diagrams_user_id ON diagrams(user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_folders_user_id ON folders(user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_diagram_shares_diagram ON diagram_shares(diagram_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_diagram_shares_user ON diagram_shares(shared_with_user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
+  await query("CREATE INDEX IF NOT EXISTS idx_chat_sessions_diagram ON chat_sessions(diagram_id)");
+  await query("CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id)");
+  await query("CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC)");
+  await query("CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id)");
+  await query("CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(session_id, created_at ASC)");
 }
 
 // --- Users ---
@@ -401,6 +438,150 @@ export async function removeDiagramShare(diagramId: string, sharedWithUserId: st
   await query(
     "DELETE FROM diagram_shares WHERE diagram_id = $1 AND shared_with_user_id = $2",
     [diagramId, sharedWithUserId]
+  );
+}
+
+// --- Chat Sessions ---
+
+export interface ChatSessionRow {
+  id: string;
+  diagramId: string;
+  userId: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessageRow {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string;
+  toolCalls: unknown | null;
+  toolResults: unknown | null;
+  tokensUsed: number | null;
+  createdAt: string;
+}
+
+export async function listChatSessions(diagramId: string, userId: string) {
+  return query<ChatSessionRow>(
+    `SELECT id, diagram_id AS "diagramId", user_id AS "userId", title,
+            created_at AS "createdAt", updated_at AS "updatedAt"
+     FROM chat_sessions
+     WHERE diagram_id = $1 AND user_id = $2
+     ORDER BY updated_at DESC`,
+    [diagramId, userId]
+  );
+}
+
+export async function getChatSession(id: string) {
+  return queryOne<ChatSessionRow>(
+    `SELECT id, diagram_id AS "diagramId", user_id AS "userId", title,
+            created_at AS "createdAt", updated_at AS "updatedAt"
+     FROM chat_sessions WHERE id = $1`,
+    [id]
+  );
+}
+
+export async function createChatSession(
+  id: string,
+  diagramId: string,
+  userId: string,
+  title?: string
+) {
+  await query(
+    "INSERT INTO chat_sessions (id, diagram_id, user_id, title) VALUES ($1, $2, $3, $4)",
+    [id, diagramId, userId, title ?? null]
+  );
+  return getChatSession(id);
+}
+
+export async function updateChatSessionTitle(id: string, title: string) {
+  await query(
+    "UPDATE chat_sessions SET title = $1, updated_at = NOW() WHERE id = $2",
+    [title, id]
+  );
+}
+
+export async function touchChatSession(id: string) {
+  await query(
+    "UPDATE chat_sessions SET updated_at = NOW() WHERE id = $1",
+    [id]
+  );
+}
+
+export async function deleteChatSession(id: string) {
+  await query("DELETE FROM chat_sessions WHERE id = $1", [id]);
+}
+
+export async function listChatMessages(sessionId: string) {
+  return query<ChatMessageRow>(
+    `SELECT id, session_id AS "sessionId", role, content,
+            tool_calls AS "toolCalls", tool_results AS "toolResults",
+            tokens_used AS "tokensUsed", created_at AS "createdAt"
+     FROM chat_messages
+     WHERE session_id = $1
+     ORDER BY created_at ASC`,
+    [sessionId]
+  );
+}
+
+export async function createChatMessage(
+  id: string,
+  sessionId: string,
+  role: string,
+  content: string,
+  extra?: { toolCalls?: unknown; toolResults?: unknown; tokensUsed?: number }
+) {
+  await query(
+    `INSERT INTO chat_messages (id, session_id, role, content, tool_calls, tool_results, tokens_used)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      id,
+      sessionId,
+      role,
+      content,
+      extra?.toolCalls ? JSON.stringify(extra.toolCalls) : null,
+      extra?.toolResults ? JSON.stringify(extra.toolResults) : null,
+      extra?.tokensUsed ?? null,
+    ]
+  );
+}
+
+// --- App Settings ---
+
+export interface AppSettingRow {
+  key: string;
+  value: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export async function getSetting(key: string): Promise<string | null> {
+  const row = await queryOne<AppSettingRow>(
+    "SELECT value FROM app_settings WHERE key = $1",
+    [key]
+  );
+  return row?.value ?? null;
+}
+
+export async function setSetting(key: string, value: string, updatedBy: string): Promise<void> {
+  await query(
+    `INSERT INTO app_settings (key, value, updated_by, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (key)
+     DO UPDATE SET value = $2, updated_by = $3, updated_at = NOW()`,
+    [key, value, updatedBy]
+  );
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  await query("DELETE FROM app_settings WHERE key = $1", [key]);
+}
+
+export async function listSettings(): Promise<AppSettingRow[]> {
+  return query<AppSettingRow>(
+    "SELECT key, value, updated_at, updated_by FROM app_settings ORDER BY key ASC"
   );
 }
 

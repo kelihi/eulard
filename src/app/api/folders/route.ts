@@ -29,21 +29,31 @@ const createSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const user = await getRequiredUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("POST", "/api/folders", { requestId });
+  try {
+    const user = await getRequiredUser();
+    if (!user) {
+      log.done(401, "unauthorized");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const parsed = createSchema.safeParse(body);
+
+    if (!parsed.success) {
+      log.done(400, "validation error", { userId: user.id });
+      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    const id = generateId();
+    const folder = await createFolder(id, parsed.data.name, user.id, parsed.data.clientId);
+    log.done(201, `created folder ${id}`, { userId: user.id });
+    return NextResponse.json(folder, { status: 201 });
+  } catch (err) {
+    log.fail(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-
-  const body = await request.json();
-  const parsed = createSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
-  }
-
-  const id = generateId();
-  const folder = await createFolder(id, parsed.data.name, user.id, parsed.data.clientId);
-  return NextResponse.json(folder, { status: 201 });
 }
 
 const updateSchema = z.object({
@@ -53,20 +63,30 @@ const updateSchema = z.object({
 });
 
 export async function PUT(request: Request) {
-  const user = await getRequiredUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("PUT", "/api/folders", { requestId });
+  try {
+    const user = await getRequiredUser();
+    if (!user) {
+      log.done(401, "unauthorized");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const parsed = updateSchema.safeParse(body);
+
+    if (!parsed.success) {
+      log.done(400, "validation error", { userId: user.id });
+      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    await updateFolder(parsed.data.id, { name: parsed.data.name, clientId: parsed.data.clientId }, user.id);
+    log.done(200, "updated folder", { userId: user.id });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    log.fail(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-
-  const body = await request.json();
-  const parsed = updateSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
-  }
-
-  await updateFolder(parsed.data.id, { name: parsed.data.name, clientId: parsed.data.clientId }, user.id);
-  return NextResponse.json({ ok: true });
 }
 
 const deleteSchema = z.object({
@@ -74,18 +94,28 @@ const deleteSchema = z.object({
 });
 
 export async function DELETE(request: Request) {
-  const user = await getRequiredUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("DELETE", "/api/folders", { requestId });
+  try {
+    const user = await getRequiredUser();
+    if (!user) {
+      log.done(401, "unauthorized");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const parsed = deleteSchema.safeParse(body);
+
+    if (!parsed.success) {
+      log.done(400, "validation error", { userId: user.id });
+      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    await deleteFolder(parsed.data.id, user.id);
+    log.done(200, "deleted folder", { userId: user.id });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    log.fail(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-
-  const body = await request.json();
-  const parsed = deleteSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
-  }
-
-  await deleteFolder(parsed.data.id, user.id);
-  return NextResponse.json({ ok: true });
 }
