@@ -74,6 +74,9 @@ export async function initializeDatabase(): Promise<void> {
     )
   `);
 
+  // Ensure client_id column exists on pre-existing folders tables
+  await query("ALTER TABLE folders ADD COLUMN IF NOT EXISTS client_id TEXT");
+
   await query(`
     CREATE TABLE IF NOT EXISTS diagrams (
       id TEXT PRIMARY KEY,
