@@ -44,7 +44,11 @@ export function middleware(request: NextRequest) {
     path: pathname,
     requestId,
   });
-  const response = NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
   response.headers.set("x-request-id", requestId);
   return response;
 }
