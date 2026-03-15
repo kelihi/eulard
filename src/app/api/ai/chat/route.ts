@@ -14,6 +14,7 @@ import {
 } from "@/lib/ai/tools";
 import { NextResponse } from "next/server";
 import { getRequiredUser } from "@/lib/auth";
+import { getSetting } from "@/lib/db";
 import { logger } from "@/lib/logger";
 
 function getApiKey(): string | null {
@@ -45,10 +46,18 @@ export async function POST(request: Request) {
 
   const { messages, currentCode } = await request.json();
 
+  // Load custom AI settings from the database
+  const [customPrompt, customModel] = await Promise.all([
+    getSetting("ai_system_prompt"),
+    getSetting("ai_model"),
+  ]);
+
+  const modelId = customModel || AI_MODEL;
+
   logger.info("ai-chat-started", {
     requestId,
     userId: user.id,
-    model: AI_MODEL,
+    model: modelId,
     messageCount: messages?.length ?? 0,
     hasCurrentCode: !!currentCode,
   });
@@ -56,8 +65,8 @@ export async function POST(request: Request) {
   const anthropic = createAnthropic({ apiKey });
 
   const result = streamText({
-    model: anthropic(AI_MODEL),
-    system: buildSystemPrompt(currentCode || ""),
+    model: anthropic(modelId),
+    system: buildSystemPrompt(currentCode || "", customPrompt),
     messages,
     tools: {
       addNodes: tool({
@@ -113,7 +122,7 @@ export async function POST(request: Request) {
       logger.info("ai-chat-completed", {
         requestId,
         userId: user.id,
-        model: AI_MODEL,
+        model: modelId,
         inputTokens: usage?.promptTokens,
         outputTokens: usage?.completionTokens,
         totalTokens: usage?.totalTokens,
