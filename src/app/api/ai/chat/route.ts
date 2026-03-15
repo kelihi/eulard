@@ -22,8 +22,13 @@ function getApiKey(): string | null {
   return null;
 }
 
+const AI_MODEL = "claude-sonnet-4-20250514";
+
 export async function POST(request: Request) {
-  const log = logger.apiRequest("POST", "/api/ai/chat");
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("POST", "/api/ai/chat", { requestId });
+  const start = Date.now();
+
   const user = await getRequiredUser();
   if (!user) {
     log.done(401, "unauthorized");
@@ -38,7 +43,6 @@ export async function POST(request: Request) {
       { status: 401 }
     );
   }
-  log.done(200, "streaming AI response", { userId: user.id });
 
   const { messages, currentCode } = await request.json();
 
@@ -48,8 +52,17 @@ export async function POST(request: Request) {
     getSetting("ai_model"),
   ]);
 
+  const modelId = customModel || AI_MODEL;
+
+  logger.info("ai-chat-started", {
+    requestId,
+    userId: user.id,
+    model: modelId,
+    messageCount: messages?.length ?? 0,
+    hasCurrentCode: !!currentCode,
+  });
+
   const anthropic = createAnthropic({ apiKey });
-  const modelId = customModel || "claude-sonnet-4-20250514";
 
   const result = streamText({
     model: anthropic(modelId),
@@ -103,6 +116,24 @@ export async function POST(request: Request) {
       }),
     },
     maxSteps: 15,
+    experimental_telemetry: { isEnabled: true },
+    onFinish({ usage, finishReason, steps }) {
+      const toolCalls = steps?.flatMap((s) => s.toolCalls ?? []) ?? [];
+      logger.info("ai-chat-completed", {
+        requestId,
+        userId: user.id,
+        model: modelId,
+        inputTokens: usage?.promptTokens,
+        outputTokens: usage?.completionTokens,
+        totalTokens: usage?.totalTokens,
+        finishReason,
+        toolCallCount: toolCalls.length,
+        toolNames: toolCalls.map((tc) => tc.toolName),
+        stepCount: steps?.length ?? 0,
+        durationMs: Date.now() - start,
+        messageCount: messages?.length ?? 0,
+      });
+    },
   });
 
   return result.toDataStreamResponse();
