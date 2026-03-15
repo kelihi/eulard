@@ -18,8 +18,8 @@ function splitLabel(label: string): string[] {
 function estimateNodeSize(label: string): { width: number; height: number } {
   const lines = splitLabel(label);
   const longestLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
-  const width = Math.max(DEFAULT_NODE_WIDTH, longestLine * 9 + 40);
-  const height = Math.max(DEFAULT_NODE_HEIGHT, lines.length * 22 + 20);
+  const width = Math.max(DEFAULT_NODE_WIDTH, longestLine * 10 + 48);
+  const height = Math.max(DEFAULT_NODE_HEIGHT, lines.length * 24 + 20);
   return { width, height };
 }
 
