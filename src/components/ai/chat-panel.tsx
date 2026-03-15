@@ -109,7 +109,6 @@ export function ChatPanel() {
 
   const { messages, input, handleInputChange, handleSubmit, status, setMessages } =
     useChat({
-      id: sessionId ?? undefined,
       api: "/api/ai/chat",
       body: { currentCode: code, sessionId, diagramId },
       onToolCall: async ({ toolCall }) => {
