@@ -1,9 +1,42 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Handle, Position, useNodeId } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import type { FlowNodeData } from "@/lib/parser/graph-to-reactflow";
+
+/**
+ * Split a label on <br/>, <br>, or <br /> tags and return an array of lines.
+ */
+function splitLabel(label: string): string[] {
+  return label.split(/<br\s*\/?>/gi);
+}
+
+/**
+ * Render a label with <br/> converted to actual line breaks.
+ */
+function renderMultilineLabel(label: string): React.ReactNode {
+  const lines = splitLabel(label);
+  if (lines.length === 1) return label;
+  return lines.map((line, i) => (
+    <span key={i}>
+      {i > 0 && <br />}
+      {line}
+    </span>
+  ));
+}
+
+/**
+ * Estimate node dimensions based on label text.
+ * Accounts for <br/> line breaks.
+ */
+function estimateNodeSize(label: string): { width: number; height: number } {
+  const lines = splitLabel(label);
+  const longestLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
+  const width = Math.max(80, longestLine * 9 + 32); // ~9px per char + padding
+  const height = Math.max(40, lines.length * 22 + 16); // ~22px per line + padding
+  return { width, height };
+}
 
 function EditableLabel({
   label,
@@ -79,7 +112,7 @@ function EditableLabel({
 
   return (
     <span onDoubleClick={handleDoubleClick} className="cursor-default select-none">
-      {label}
+      {renderMultilineLabel(label)}
     </span>
   );
 }
@@ -87,7 +120,7 @@ function EditableLabel({
 function DefaultNode({ data }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   return (
-    <div className="px-4 py-2 rounded border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center">
+    <div className="px-4 py-2 rounded border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center whitespace-normal break-words">
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
@@ -97,18 +130,23 @@ function DefaultNode({ data }: NodeProps) {
 
 function DecisionNode({ data }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
+  const { width, height } = useMemo(() => {
+    const size = estimateNodeSize(nodeData.label);
+    // Diamond needs more space: text area is roughly half the diamond dimensions
+    return { width: Math.max(120, size.width * 1.6), height: Math.max(80, size.height * 1.6) };
+  }, [nodeData.label]);
   return (
-    <div className="relative flex items-center justify-center" style={{ width: 120, height: 80 }}>
+    <div className="relative flex items-center justify-center" style={{ width, height }}>
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <svg viewBox="0 0 120 80" className="absolute inset-0 w-full h-full">
+      <svg viewBox={`0 0 ${width} ${height}`} className="absolute inset-0 w-full h-full">
         <polygon
-          points="60,2 118,40 60,78 2,40"
+          points={`${width / 2},2 ${width - 2},${height / 2} ${width / 2},${height - 2} 2,${height / 2}`}
           fill="var(--background)"
           stroke="var(--border)"
           strokeWidth="2"
         />
       </svg>
-      <span className="relative z-10 text-sm font-medium text-center px-4">
+      <span className="relative z-10 text-sm font-medium text-center px-4 whitespace-normal break-words">
         <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       </span>
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
@@ -119,7 +157,7 @@ function DecisionNode({ data }: NodeProps) {
 function StadiumNode({ data }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   return (
-    <div className="px-4 py-2 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center">
+    <div className="px-4 py-2 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center whitespace-normal break-words">
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
@@ -130,7 +168,7 @@ function StadiumNode({ data }: NodeProps) {
 function SubroutineNode({ data }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   return (
-    <div className="px-4 py-2 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center border-double border-4">
+    <div className="px-4 py-2 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center border-double border-4 whitespace-normal break-words">
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
@@ -143,7 +181,7 @@ function CylinderNode({ data }: NodeProps) {
   return (
     <div className="relative flex items-center justify-center" style={{ minWidth: 80, minHeight: 60 }}>
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <div className="px-4 py-3 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%]">
+      <div className="px-4 py-3 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%] whitespace-normal break-words">
         <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       </div>
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
@@ -153,8 +191,17 @@ function CylinderNode({ data }: NodeProps) {
 
 function CircleNode({ data }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
+  const size = useMemo(() => {
+    const est = estimateNodeSize(nodeData.label);
+    // Circle diameter should fit the content diagonally
+    const diameter = Math.max(64, Math.ceil(Math.sqrt(est.width * est.width + est.height * est.height) * 0.75));
+    return diameter;
+  }, [nodeData.label]);
   return (
-    <div className="w-16 h-16 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm flex items-center justify-center text-center">
+    <div
+      className="rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm flex items-center justify-center text-center whitespace-normal break-words p-2"
+      style={{ width: size, height: size }}
+    >
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
