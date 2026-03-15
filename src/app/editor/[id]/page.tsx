@@ -17,6 +17,7 @@ export default function EditorPage() {
   const loadDiagram = useDiagramStore((s) => s.loadDiagram);
   const diagram = useDiagramStore((s) => s.diagram);
   const [chatOpen, setChatOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useKeyboardShortcuts();
@@ -69,11 +70,13 @@ export default function EditorPage() {
 
   return (
     <div className="h-screen flex overflow-hidden">
-      <Sidebar />
+      {sidebarOpen && <Sidebar />}
       <div className="flex-1 flex flex-col min-w-0">
         <Header
           onToggleChat={() => setChatOpen(!chatOpen)}
           chatOpen={chatOpen}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          sidebarOpen={sidebarOpen}
         />
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 min-w-0">

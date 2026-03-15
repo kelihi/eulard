@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { CodeEditor } from "./code-editor";
 import { MermaidPreview } from "./mermaid-preview";
+import { Maximize2, Minimize2 } from "lucide-react";
 
 // Lazy-load React Flow canvas (heavy dependency)
 const VisualCanvas = dynamic(
@@ -12,12 +13,18 @@ const VisualCanvas = dynamic(
 );
 
 type ViewMode = "split" | "canvas";
+type FullscreenPane = null | "code" | "preview" | "canvas";
 
 export function EditorLayout() {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [splitPercent, setSplitPercent] = useState(50);
+  const [fullscreenPane, setFullscreenPane] = useState<FullscreenPane>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
+
+  const toggleFullscreen = useCallback((pane: FullscreenPane) => {
+    setFullscreenPane((current) => (current === pane ? null : pane));
+  }, []);
 
   const handleMouseDown = useCallback(() => {
     isDragging.current = true;
@@ -43,12 +50,26 @@ export function EditorLayout() {
     document.addEventListener("mouseup", handleMouseUp);
   }, []);
 
+  const fullscreenButton = (pane: NonNullable<FullscreenPane>, title: string) => (
+    <button
+      onClick={() => toggleFullscreen(pane)}
+      className="absolute top-1 right-1 z-10 p-1 rounded bg-[var(--background)]/80 hover:bg-[var(--muted)] border border-[var(--border)] opacity-0 group-hover/pane:opacity-100 transition-opacity"
+      title={fullscreenPane === pane ? `Exit fullscreen` : `Fullscreen ${title}`}
+    >
+      {fullscreenPane === pane ? (
+        <Minimize2 className="w-3.5 h-3.5" />
+      ) : (
+        <Maximize2 className="w-3.5 h-3.5" />
+      )}
+    </button>
+  );
+
   return (
     <div className="flex flex-col h-full">
       {/* View mode toggle */}
       <div className="flex items-center gap-1 px-2 py-1 border-b border-[var(--border)] bg-[var(--muted)] shrink-0">
         <button
-          onClick={() => setViewMode("split")}
+          onClick={() => { setViewMode("split"); setFullscreenPane(null); }}
           className={`px-2 py-0.5 text-xs rounded transition-colors ${
             viewMode === "split"
               ? "bg-[var(--background)] shadow-sm font-medium"
@@ -58,7 +79,7 @@ export function EditorLayout() {
           Code + Preview
         </button>
         <button
-          onClick={() => setViewMode("canvas")}
+          onClick={() => { setViewMode("canvas"); setFullscreenPane(null); }}
           className={`px-2 py-0.5 text-xs rounded transition-colors ${
             viewMode === "canvas"
               ? "bg-[var(--background)] shadow-sm font-medium"
@@ -67,34 +88,69 @@ export function EditorLayout() {
         >
           Visual Canvas
         </button>
+
+        {fullscreenPane && (
+          <button
+            onClick={() => setFullscreenPane(null)}
+            className="ml-auto px-2 py-0.5 text-xs rounded bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 transition-colors flex items-center gap-1"
+          >
+            <Minimize2 className="w-3 h-3" />
+            Exit Fullscreen
+          </button>
+        )}
       </div>
 
       {/* Panes */}
       {viewMode === "split" ? (
         <div ref={containerRef} className="flex flex-1 overflow-hidden">
-          <div style={{ width: `${splitPercent}%` }} className="h-full min-w-0">
-            <CodeEditor />
-          </div>
-          <div
-            onMouseDown={handleMouseDown}
-            className="w-1 bg-[var(--border)] hover:bg-[var(--primary)] cursor-col-resize transition-colors shrink-0"
-          />
-          <div
-            style={{ width: `${100 - splitPercent}%` }}
-            className="h-full min-w-0 bg-white dark:bg-[var(--muted)]"
-          >
-            <MermaidPreview />
-          </div>
+          {fullscreenPane !== "preview" && (
+            <div
+              style={{ width: fullscreenPane === "code" ? "100%" : `${splitPercent}%` }}
+              className="h-full min-w-0 relative group/pane"
+            >
+              {fullscreenButton("code", "Code Editor")}
+              <CodeEditor />
+            </div>
+          )}
+          {!fullscreenPane && (
+            <div
+              onMouseDown={handleMouseDown}
+              className="w-1 bg-[var(--border)] hover:bg-[var(--primary)] cursor-col-resize transition-colors shrink-0"
+            />
+          )}
+          {fullscreenPane !== "code" && (
+            <div
+              style={{ width: fullscreenPane === "preview" ? "100%" : `${100 - splitPercent}%` }}
+              className="h-full min-w-0 bg-white dark:bg-[var(--muted)] relative group/pane"
+            >
+              {fullscreenButton("preview", "Preview")}
+              <MermaidPreview />
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex flex-1 overflow-hidden">
-          <div style={{ width: "35%" }} className="h-full min-w-0">
-            <CodeEditor />
-          </div>
-          <div className="w-1 bg-[var(--border)] shrink-0" />
-          <div style={{ width: "65%" }} className="h-full min-w-0">
-            <VisualCanvas />
-          </div>
+          {fullscreenPane !== "canvas" && (
+            <div
+              style={{ width: fullscreenPane === "code" ? "100%" : "35%" }}
+              className="h-full min-w-0 relative group/pane"
+            >
+              {fullscreenButton("code", "Code Editor")}
+              <CodeEditor />
+            </div>
+          )}
+          {!fullscreenPane && (
+            <div className="w-1 bg-[var(--border)] shrink-0" />
+          )}
+          {fullscreenPane !== "code" && (
+            <div
+              style={{ width: fullscreenPane === "canvas" ? "100%" : "65%" }}
+              className="h-full min-w-0 relative group/pane"
+            >
+              {fullscreenButton("canvas", "Visual Canvas")}
+              <VisualCanvas />
+            </div>
+          )}
         </div>
       )}
     </div>
