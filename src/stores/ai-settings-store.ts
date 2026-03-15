@@ -37,7 +37,7 @@ function loadSettings(): AISettings {
   } catch {
     // ignore
   }
-  return { maxSteps: 15, model: "claude-sonnet-4-20250514" };
+  return { maxSteps: 15, model: "claude-sonnet-4-6" };
 }
 
 function persistSettings(settings: AISettings) {
