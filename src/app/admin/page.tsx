@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Bot, RotateCcw } from "lucide-react";
 
 interface User {
   id: string;
@@ -11,6 +11,13 @@ interface User {
   name: string;
   role: string;
   created_at: string;
+}
+
+interface AISettings {
+  systemPrompt: string | null;
+  defaultSystemPrompt: string;
+  model: string | null;
+  defaultModel: string;
 }
 
 export default function AdminPage() {
@@ -24,6 +31,14 @@ export default function AdminPage() {
   const [inviting, setInviting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  // AI Settings state
+  const [aiSettings, setAiSettings] = useState<AISettings | null>(null);
+  const [aiSettingsLoading, setAiSettingsLoading] = useState(true);
+  const [editedPrompt, setEditedPrompt] = useState("");
+  const [editedModel, setEditedModel] = useState("");
+  const [savingAiSettings, setSavingAiSettings] = useState(false);
+  const [showPromptEditor, setShowPromptEditor] = useState(false);
+
   useEffect(() => {
     if (status === "loading") return;
     if (!session?.user || (session.user as { role?: string }).role !== "admin") {
@@ -31,6 +46,7 @@ export default function AdminPage() {
       return;
     }
     loadUsers();
+    loadAiSettings();
   }, [session, status, router]);
 
   const loadUsers = async () => {
@@ -79,6 +95,54 @@ export default function AdminPage() {
       setMessage({ type: "error", text: "Failed to invite user." });
     }
     setInviting(false);
+  };
+
+  const loadAiSettings = async () => {
+    setAiSettingsLoading(true);
+    try {
+      const res = await fetch("/api/admin/ai-settings");
+      if (res.ok) {
+        const data: AISettings = await res.json();
+        setAiSettings(data);
+        setEditedPrompt(data.systemPrompt ?? "");
+        setEditedModel(data.model ?? "");
+      }
+    } catch {
+      // ignore
+    }
+    setAiSettingsLoading(false);
+  };
+
+  const handleSaveAiSettings = async () => {
+    setSavingAiSettings(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/admin/ai-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemPrompt: editedPrompt.trim() || null,
+          model: editedModel.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        const data: AISettings = await res.json();
+        setAiSettings(data);
+        setEditedPrompt(data.systemPrompt ?? "");
+        setEditedModel(data.model ?? "");
+        setMessage({ type: "success", text: "AI settings saved." });
+      } else {
+        const data = await res.json();
+        setMessage({ type: "error", text: data.error || "Failed to save AI settings." });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to save AI settings." });
+    }
+    setSavingAiSettings(false);
+  };
+
+  const handleResetPrompt = () => {
+    setEditedPrompt("");
   };
 
   const handleDelete = async (userId: string, email: string) => {
@@ -182,6 +246,102 @@ export default function AdminPage() {
             {message.text}
           </div>
         )}
+
+        {/* AI Settings */}
+        <div className="border border-[var(--border)] rounded-xl p-6 mb-8">
+          <h2 className="text-base font-semibold mb-4 flex items-center gap-2">
+            <Bot className="w-4 h-4" />
+            AI Configuration
+          </h2>
+          {aiSettingsLoading ? (
+            <p className="text-sm text-[var(--muted-foreground)]">Loading AI settings...</p>
+          ) : (
+            <div className="space-y-4">
+              {/* Model selector */}
+              <div>
+                <label className="block text-xs font-medium mb-1">
+                  Model {aiSettings?.defaultModel && (
+                    <span className="text-[var(--muted-foreground)] font-normal">(default: {aiSettings.defaultModel})</span>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  value={editedModel}
+                  onChange={(e) => setEditedModel(e.target.value)}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] font-mono"
+                  placeholder={aiSettings?.defaultModel || "claude-sonnet-4-20250514"}
+                />
+                <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                  Leave empty to use the default model. Must be a valid Anthropic model ID.
+                </p>
+              </div>
+
+              {/* System Prompt */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium">
+                    System Prompt
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowPromptEditor(!showPromptEditor)}
+                      className="text-xs text-[var(--primary)] hover:underline"
+                    >
+                      {showPromptEditor ? "Hide Editor" : "Show Editor"}
+                    </button>
+                    {editedPrompt && (
+                      <button
+                        type="button"
+                        onClick={handleResetPrompt}
+                        className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                        title="Reset to default prompt"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-[var(--muted-foreground)] mb-2">
+                  Customize the system prompt sent to the AI. Use <code className="bg-[var(--muted)] px-1 rounded">{"{{CURRENT_CODE}}"}</code> and <code className="bg-[var(--muted)] px-1 rounded">{"{{GRAPH_CONTEXT}}"}</code> as placeholders for the current diagram context.
+                  Leave empty to use the default prompt.
+                </p>
+                {showPromptEditor && (
+                  <>
+                    <textarea
+                      value={editedPrompt}
+                      onChange={(e) => setEditedPrompt(e.target.value)}
+                      rows={20}
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] font-mono resize-y"
+                      placeholder="Leave empty to use the default system prompt..."
+                    />
+                    {aiSettings?.defaultSystemPrompt && !editedPrompt && (
+                      <details className="mt-2">
+                        <summary className="text-xs text-[var(--muted-foreground)] cursor-pointer hover:text-[var(--foreground)]">
+                          View current default prompt
+                        </summary>
+                        <pre className="mt-2 p-3 text-xs bg-[var(--muted)] rounded-lg overflow-auto max-h-96 whitespace-pre-wrap">
+                          {aiSettings.defaultSystemPrompt}
+                        </pre>
+                      </details>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Save button */}
+              <button
+                type="button"
+                onClick={handleSaveAiSettings}
+                disabled={savingAiSettings}
+                className="px-4 py-2 text-sm font-medium bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+              >
+                {savingAiSettings ? "Saving..." : "Save AI Settings"}
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Users List */}
         <div className="border border-[var(--border)] rounded-xl overflow-hidden">
