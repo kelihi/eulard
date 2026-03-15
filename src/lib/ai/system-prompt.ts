@@ -94,6 +94,6 @@ Edges: ${graph.edges.map((e) => `${e.source}→${e.target}${e.label ? `[${e.labe
   const template = customPromptTemplate || getDefaultSystemPrompt();
 
   return template
-    .replace("{{CURRENT_CODE}}", currentCode)
-    .replace("{{GRAPH_CONTEXT}}", graphContext);
+    .replace("{{CURRENT_CODE}}", () => currentCode)
+    .replace("{{GRAPH_CONTEXT}}", () => graphContext);
 }
