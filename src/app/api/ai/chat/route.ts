@@ -81,7 +81,7 @@ function formatClientContext(client: ClientResponse): string {
   if (client.source_systems.length > 0) {
     lines.push(`\nSource Systems:`);
     for (const ss of client.source_systems) {
-      lines.push(`  - ${ss.name}${ss.system_type ? ` (${ss.system_type})` : ""}`);
+      lines.push(`  - ${ss.name}${ss.description ? ` (${ss.description})` : ""}`);
     }
   }
 
@@ -173,64 +173,65 @@ export async function POST(request: Request) {
     }),
   };
 
-  // Build client context tools (only when feedback system is configured)
-  const clientTools = isFeedbackSystemConfigured()
-    ? {
-        listClients: tool({
-          description:
-            "Search and list clients from the feedback system. Returns client names, IDs, status, and integration links (ClickUp, Notion, Slack). Use when the user mentions a client or asks about client data.",
-          parameters: listClientsSchema,
-          execute: async ({ search, status }) => {
-            try {
-              const result = await listClients({ search, status, limit: 20 });
-              if (result.items.length === 0) {
-                return "No clients found matching your criteria.";
-              }
-              const clientList = result.items
-                .map((c) => {
-                  const integrations: string[] = [];
-                  if (c.clickup_folder_id) integrations.push("ClickUp");
-                  if (c.notion_page_url) integrations.push("Notion");
-                  if (c.internal_slack_channel_id || c.external_slack_channel_id)
-                    integrations.push("Slack");
-                  const intStr =
-                    integrations.length > 0
-                      ? ` [${integrations.join(", ")}]`
-                      : "";
-                  return `- ${c.name} (ID: ${c.id}, status: ${c.status})${intStr}`;
-                })
-                .join("\n");
-              return `Found ${result.total} client(s):\n${clientList}`;
-            } catch (error) {
-              const message =
-                error instanceof Error ? error.message : String(error);
-              return `Error fetching clients: ${message}`;
-            }
-          },
-        }),
-        getClientContext: tool({
-          description:
-            "Fetch full details for a specific client including team members, tools, domains, source systems, and integration links (ClickUp folder, Notion page, Slack channels). Use after listClients to get detailed context for diagram creation.",
-          parameters: getClientContextSchema,
-          execute: async ({ clientId }) => {
-            try {
-              const client = await getClient(clientId);
-              return formatClientContext(client);
-            } catch (error) {
-              const message =
-                error instanceof Error ? error.message : String(error);
-              return `Error fetching client details: ${message}`;
-            }
-          },
-        }),
-      }
-    : {};
+  // Conditionally add client context tools when feedback system is configured
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allTools: Record<string, any> = { ...diagramTools };
+
+  if (isFeedbackSystemConfigured()) {
+    allTools.listClients = tool({
+      description:
+        "Search and list clients from the feedback system. Returns client names, IDs, status, and integration links (ClickUp, Notion, Slack). Use when the user mentions a client or asks about client data.",
+      parameters: listClientsSchema,
+      execute: async ({ search, status }: { search?: string; status?: string }) => {
+        try {
+          const result = await listClients({ search, status, limit: 20 });
+          if (result.items.length === 0) {
+            return "No clients found matching your criteria.";
+          }
+          const clientList = result.items
+            .map((c) => {
+              const integrations: string[] = [];
+              if (c.clickup_folder_id) integrations.push("ClickUp");
+              if (c.notion_page_url) integrations.push("Notion");
+              if (c.internal_slack_channel_id || c.external_slack_channel_id)
+                integrations.push("Slack");
+              const intStr =
+                integrations.length > 0
+                  ? ` [${integrations.join(", ")}]`
+                  : "";
+              return `- ${c.name} (ID: ${c.id}, status: ${c.status})${intStr}`;
+            })
+            .join("\n");
+          return `Found ${result.total} client(s):\n${clientList}`;
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return `Error fetching clients: ${message}`;
+        }
+      },
+    });
+    allTools.getClientContext = tool({
+      description:
+        "Fetch full details for a specific client including team members, tools, domains, source systems, and integration links (ClickUp folder, Notion page, Slack channels). Use after listClients to get detailed context for diagram creation.",
+      parameters: getClientContextSchema,
+      execute: async ({ clientId }: { clientId: string }) => {
+        try {
+          const client = await getClient(clientId);
+          return formatClientContext(client);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return `Error fetching client details: ${message}`;
+        }
+      },
+    });
+  }
 
   const result = streamText({
     model: anthropic("claude-sonnet-4-20250514"),
     system: buildSystemPrompt(currentCode || "", folderClientContext),
     messages,
-    tools: { ...diagramTools, ...clientTools },
+    tools: allTools,
     maxSteps: 15,
   });
 

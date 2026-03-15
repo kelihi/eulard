@@ -23,7 +23,7 @@ export interface DomainSummary {
 export interface SourceSystemSummary {
   id: number;
   name: string;
-  system_type: string | null;
+  description: string | null;
 }
 
 export interface ClientResponse {
@@ -51,4 +51,6 @@ export interface ClientResponse {
 export interface ClientListResponse {
   items: ClientResponse[];
   total: number;
+  offset: number;
+  limit: number;
 }

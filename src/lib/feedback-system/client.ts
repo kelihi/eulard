@@ -1,16 +1,50 @@
 /**
  * HTTP client for the feedback_system API.
  * Fetches client data including integration details (ClickUp, Notion, Slack).
+ *
+ * Authentication options (checked in order):
+ * 1. FEEDBACK_SYSTEM_API_TOKEN — a pre-minted JWT or raw Bearer token.
+ * 2. FEEDBACK_SYSTEM_JWT_SECRET + FEEDBACK_SYSTEM_SERVICE_PERSON_ID +
+ *    FEEDBACK_SYSTEM_SERVICE_EMAIL — eulard mints its own short-lived JWT
+ *    using the same secret key as the feedback_system backend (JWT_SECRET_KEY).
  */
 
+import { SignJWT } from "jose";
 import type { ClientResponse, ClientListResponse } from "./types";
 
 function getBaseUrl(): string | null {
   return process.env.FEEDBACK_SYSTEM_API_URL || null;
 }
 
-function getApiToken(): string | null {
-  return process.env.FEEDBACK_SYSTEM_API_TOKEN || null;
+/**
+ * Mint a short-lived JWT that the feedback_system backend will accept.
+ * Uses the same HS256 / JWT_SECRET_KEY algorithm as feedback_system's auth.py.
+ */
+async function mintServiceToken(): Promise<string | null> {
+  const secret = process.env.FEEDBACK_SYSTEM_JWT_SECRET;
+  const personId = process.env.FEEDBACK_SYSTEM_SERVICE_PERSON_ID;
+  const email = process.env.FEEDBACK_SYSTEM_SERVICE_EMAIL;
+
+  if (!secret || !personId || !email) return null;
+
+  const secretKey = new TextEncoder().encode(secret);
+
+  const token = await new SignJWT({ person_id: personId, email })
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime("1h")
+    .sign(secretKey);
+
+  return token;
+}
+
+/**
+ * Resolve a Bearer token for the feedback_system API.
+ * Prefers a static token if configured, otherwise mints a JWT.
+ */
+async function resolveToken(): Promise<string | null> {
+  const staticToken = process.env.FEEDBACK_SYSTEM_API_TOKEN;
+  if (staticToken) return staticToken;
+  return mintServiceToken();
 }
 
 async function apiFetch<T>(path: string): Promise<T> {
@@ -26,7 +60,7 @@ async function apiFetch<T>(path: string): Promise<T> {
     "Content-Type": "application/json",
   };
 
-  const token = getApiToken();
+  const token = await resolveToken();
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
