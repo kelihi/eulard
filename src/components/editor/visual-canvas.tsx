@@ -33,9 +33,19 @@ interface ContextMenuState {
   y: number;
 }
 
+function buildPositionMap(nodes: Node[]): Record<string, { x: number; y: number }> {
+  const map: Record<string, { x: number; y: number }> = {};
+  for (const n of nodes) {
+    map[n.id] = { x: n.position.x, y: n.position.y };
+  }
+  return map;
+}
+
 export function VisualCanvas() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
+  const positions = useDiagramStore((s) => s.diagram?.positions ?? null);
   const setCode = useDiagramStore((s) => s.setCode);
+  const setPositions = useDiagramStore((s) => s.setPositions);
   const syncState = useDiagramStore((s) => s.syncState);
 
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -58,6 +68,31 @@ export function VisualCanvas() {
       setCode(newCode);
     },
     [setCode]
+  );
+
+  // Rename node callback — passed into custom nodes via data
+  const onRenameNode = useCallback(
+    (nodeId: string, newLabel: string) => {
+      if (!graphRef.current) return;
+
+      const updatedGraph: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: graphRef.current.nodes.map((n) =>
+          n.id === nodeId ? { ...n, label: newLabel } : n
+        ),
+      };
+      syncGraphToCode(updatedGraph);
+
+      // Update React Flow nodes directly so the label updates visually
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === nodeId
+            ? { ...n, data: { ...n.data, label: newLabel } }
+            : n
+        )
+      );
+    },
+    [syncGraphToCode]
   );
 
   // Edge rename handler — passed into edge data
@@ -113,32 +148,54 @@ export function VisualCanvas() {
       const graph = mermaidToGraph(code);
       if (!graph) return;
 
+      // Check if stored positions exist in the database
+      let savedPositions: Record<string, { x: number; y: number }> | null = null;
+      if (positions) {
+        try {
+          savedPositions = JSON.parse(positions) as Record<string, { x: number; y: number }>;
+        } catch {
+          // ignore invalid JSON
+        }
+      }
+
       // Apply auto-layout if nodes have no positions (all at 0,0)
       const allAtOrigin = graph.nodes.every(
         (n) => n.position.x === 0 && n.position.y === 0
       );
 
-      const layoutGraph = allAtOrigin ? autoLayout(graph) : graph;
+      let layoutGraph = allAtOrigin ? autoLayout(graph) : graph;
 
-      // If we had previous positions, preserve them for existing nodes
-      if (graphRef.current && !allAtOrigin) {
+      // If saved positions exist, apply them to matching nodes
+      if (savedPositions) {
+        layoutGraph = {
+          ...layoutGraph,
+          nodes: layoutGraph.nodes.map((n) => {
+            const saved = savedPositions[n.id];
+            return saved ? { ...n, position: { x: saved.x, y: saved.y } } : n;
+          }),
+        };
+      } else if (graphRef.current && !allAtOrigin) {
+        // Preserve previous in-memory positions for existing nodes
         const prevPositions = new Map(
           graphRef.current.nodes.map((n) => [n.id, n.position])
         );
-        layoutGraph.nodes = layoutGraph.nodes.map((n) => ({
-          ...n,
-          position: prevPositions.get(n.id) ?? n.position,
-        }));
+        layoutGraph = {
+          ...layoutGraph,
+          nodes: layoutGraph.nodes.map((n) => ({
+            ...n,
+            position: prevPositions.get(n.id) ?? n.position,
+          })),
+        };
       }
 
       graphRef.current = layoutGraph;
-      const { nodes: newNodes, edges: newEdges } = graphToReactFlow(layoutGraph);
+      const { nodes: newNodes, edges: newEdges } = graphToReactFlow(layoutGraph, onRenameNode, isLocked);
       setNodes(newNodes);
       setEdges(injectEdgeCallbacks(newEdges));
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [code, injectEdgeCallbacks]);
+  }, [code, positions, onRenameNode, isLocked, injectEdgeCallbacks]);
 
   // Re-inject edge callbacks when handleRenameEdge changes
   useEffect(() => {
@@ -172,13 +229,17 @@ export function VisualCanvas() {
               updatedNodes
             );
             syncGraphToCode(updatedGraph);
+
+            // Persist positions to the database
+            const positionMap = buildPositionMap(updatedNodes);
+            setPositions(JSON.stringify(positionMap));
           }
         }
 
         return updatedNodes;
       });
     },
-    [isLocked, syncGraphToCode]
+    [isLocked, syncGraphToCode, setPositions]
   );
 
   const onEdgesChange = useCallback(
