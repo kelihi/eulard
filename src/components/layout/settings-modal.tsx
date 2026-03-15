@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Key, Check, Trash2 } from "lucide-react";
+import { X, Key, Check, Trash2, Cpu, Zap } from "lucide-react";
+import {
+  useAISettingsStore,
+  AI_MODELS,
+  type AIModelId,
+} from "@/stores/ai-settings-store";
 
 interface SettingsModalProps {
   open: boolean;
@@ -14,6 +19,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [keyPreview, setKeyPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  const aiMaxSteps = useAISettingsStore((s) => s.maxSteps);
+  const aiModel = useAISettingsStore((s) => s.model);
+  const setAIMaxSteps = useAISettingsStore((s) => s.setMaxSteps);
+  const setAIModel = useAISettingsStore((s) => s.setModel);
 
   useEffect(() => {
     if (open) {
@@ -74,7 +84,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     <>
       <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-xl w-full max-w-md">
+        <div className="bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
             <h2 className="text-base font-semibold">Settings</h2>
@@ -87,7 +97,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           </div>
 
           {/* Content */}
-          <div className="px-5 py-4 space-y-4">
+          <div className="px-5 py-4 space-y-6">
+            {/* API Key Section */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium mb-2">
                 <Key className="w-3.5 h-3.5" />
@@ -139,6 +150,66 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   {saving ? "..." : "Save"}
                 </button>
               </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-[var(--border)]" />
+
+            {/* AI Model Section */}
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium mb-2">
+                <Cpu className="w-3.5 h-3.5" />
+                AI Model
+              </label>
+              <p className="text-xs text-[var(--muted-foreground)] mb-3">
+                Choose the Claude model for AI chat. Sonnet 4 is most capable;
+                Haiku is faster and cheaper.
+              </p>
+              <select
+                value={aiModel}
+                onChange={(e) => setAIModel(e.target.value as AIModelId)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+              >
+                {AI_MODELS.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Max Steps Section */}
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium mb-2">
+                <Zap className="w-3.5 h-3.5" />
+                Max Tool Steps
+              </label>
+              <p className="text-xs text-[var(--muted-foreground)] mb-3">
+                Maximum number of tool call iterations per AI response. Increase
+                for complex diagrams with many nodes/edges. Higher values use
+                more tokens.
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={50}
+                  value={aiMaxSteps}
+                  onChange={(e) => setAIMaxSteps(Number(e.target.value))}
+                  className="flex-1 accent-[var(--primary)]"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={aiMaxSteps}
+                  onChange={(e) => setAIMaxSteps(Number(e.target.value))}
+                  className="w-16 px-2 py-1 text-sm text-center rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                />
+              </div>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                Default: 15. Recommended: 30+ for complex supply chain or ER diagrams.
+              </p>
             </div>
 
             {message && (

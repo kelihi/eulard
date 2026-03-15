@@ -16,6 +16,8 @@ import { NextResponse } from "next/server";
 import { getRequiredUser } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
+export const maxDuration = 60;
+
 function getApiKey(): string | null {
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
   return null;
@@ -39,12 +41,24 @@ export async function POST(request: Request) {
   }
   log.done(200, "streaming AI response", { userId: user.id });
 
-  const { messages, currentCode } = await request.json();
+  const { messages, currentCode, maxSteps: clientMaxSteps, model: clientModel } = await request.json();
+
+  const allowedModels = [
+    "claude-sonnet-4-20250514",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-haiku-20241022",
+  ];
+  const modelId = allowedModels.includes(clientModel)
+    ? clientModel
+    : "claude-sonnet-4-20250514";
+  const maxSteps = typeof clientMaxSteps === "number"
+    ? Math.max(1, Math.min(100, clientMaxSteps))
+    : 15;
 
   const anthropic = createAnthropic({ apiKey });
 
   const result = streamText({
-    model: anthropic("claude-sonnet-4-20250514"),
+    model: anthropic(modelId),
     system: buildSystemPrompt(currentCode || ""),
     messages,
     tools: {
@@ -94,7 +108,7 @@ export async function POST(request: Request) {
         parameters: exportDiagramSchema,
       }),
     },
-    maxSteps: 15,
+    maxSteps,
   });
 
   return result.toDataStreamResponse();
