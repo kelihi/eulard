@@ -33,8 +33,8 @@ function renderMultilineLabel(label: string): React.ReactNode {
 function estimateNodeSize(label: string): { width: number; height: number } {
   const lines = splitLabel(label);
   const longestLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
-  const width = Math.max(80, longestLine * 9 + 32); // ~9px per char + padding
-  const height = Math.max(40, lines.length * 22 + 16); // ~22px per line + padding
+  const width = Math.max(100, longestLine * 9 + 40); // ~9px per char + padding
+  const height = Math.max(40, lines.length * 22 + 20); // ~22px per line + padding
   return { width, height };
 }
 
@@ -119,8 +119,9 @@ function EditableLabel({
 
 function DefaultNode({ data }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
+  const { width } = useMemo(() => estimateNodeSize(nodeData.label), [nodeData.label]);
   return (
-    <div className="px-4 py-2 rounded border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center whitespace-normal break-words">
+    <div className="px-4 py-2 rounded border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words" style={{ minWidth: width }}>
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
@@ -156,8 +157,9 @@ function DecisionNode({ data }: NodeProps) {
 
 function StadiumNode({ data }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
+  const { width } = useMemo(() => estimateNodeSize(nodeData.label), [nodeData.label]);
   return (
-    <div className="px-4 py-2 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center whitespace-normal break-words">
+    <div className="px-4 py-2 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words" style={{ minWidth: width }}>
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
@@ -167,8 +169,9 @@ function StadiumNode({ data }: NodeProps) {
 
 function SubroutineNode({ data }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
+  const { width } = useMemo(() => estimateNodeSize(nodeData.label), [nodeData.label]);
   return (
-    <div className="px-4 py-2 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm min-w-[60px] text-center border-double border-4 whitespace-normal break-words">
+    <div className="px-4 py-2 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center border-double border-4 whitespace-normal break-words" style={{ minWidth: width }}>
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
@@ -178,8 +181,9 @@ function SubroutineNode({ data }: NodeProps) {
 
 function CylinderNode({ data }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
+  const { width } = useMemo(() => estimateNodeSize(nodeData.label), [nodeData.label]);
   return (
-    <div className="relative flex items-center justify-center" style={{ minWidth: 80, minHeight: 60 }}>
+    <div className="relative flex items-center justify-center" style={{ minWidth: width, minHeight: 60 }}>
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <div className="px-4 py-3 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%] whitespace-normal break-words">
         <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
