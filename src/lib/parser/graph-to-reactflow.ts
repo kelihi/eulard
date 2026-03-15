@@ -11,7 +11,7 @@ function splitLabel(label: string): string[] {
 /**
  * Estimate node dimensions based on label text.
  */
-function estimateNodeSize(label: string): { width: number; height: number } {
+export function estimateNodeSize(label: string): { width: number; height: number } {
   const lines = splitLabel(label);
   const longestLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
   const width = Math.max(100, longestLine * 10 + 48);
