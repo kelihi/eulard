@@ -1,24 +1,52 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+// Edge-compatible structured JSON logger (cannot import Node.js logger in Edge runtime)
+function edgeLog(
+  severity: string,
+  message: string,
+  extra?: Record<string, unknown>
+) {
+  console.log(
+    JSON.stringify({
+      severity,
+      timestamp: new Date().toISOString(),
+      message,
+      ...extra,
+    })
+  );
+}
+
 // Simple middleware that checks for the session token cookie.
 // Full auth validation happens in the API routes themselves.
 // This avoids importing Node.js modules (bcryptjs, pg) in Edge runtime.
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const requestId = crypto.randomUUID();
   const token =
     request.cookies.get("authjs.session-token")?.value ||
     request.cookies.get("__Secure-authjs.session-token")?.value;
 
   if (!token) {
-    console.log(`[middleware] ${request.method} ${pathname} -> redirect to /login (no session cookie)`);
+    edgeLog("INFO", "middleware redirect", {
+      method: request.method,
+      path: pathname,
+      requestId,
+      reason: "no session cookie",
+    });
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  console.log(`[middleware] ${request.method} ${pathname} -> pass (has session cookie)`);
-  return NextResponse.next();
+  edgeLog("INFO", "middleware pass", {
+    method: request.method,
+    path: pathname,
+    requestId,
+  });
+  const response = NextResponse.next();
+  response.headers.set("x-request-id", requestId);
+  return response;
 }
 
 export const config = {
