@@ -1,9 +1,8 @@
 import { create } from "zustand";
 
 export const AI_MODELS = [
-  { id: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-  { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-  { id: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
+  { id: "claude-opus-4-6", label: "Claude Opus 4.6" },
 ] as const;
 
 export type AIModelId = (typeof AI_MODELS)[number]["id"];
@@ -22,7 +21,7 @@ interface AISettingsStore extends AISettings {
 
 function loadSettings(): AISettings {
   if (typeof window === "undefined") {
-    return { maxSteps: 15, model: "claude-sonnet-4-20250514" };
+    return { maxSteps: 15, model: "claude-sonnet-4-6" };
   }
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -32,7 +31,7 @@ function loadSettings(): AISettings {
         maxSteps: typeof parsed.maxSteps === "number" ? parsed.maxSteps : 15,
         model: AI_MODELS.some((m) => m.id === parsed.model)
           ? parsed.model
-          : "claude-sonnet-4-20250514",
+          : "claude-sonnet-4-6",
       };
     }
   } catch {

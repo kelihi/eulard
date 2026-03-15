@@ -44,13 +44,12 @@ export async function POST(request: Request) {
   const { messages, currentCode, maxSteps: clientMaxSteps, model: clientModel } = await request.json();
 
   const allowedModels = [
-    "claude-sonnet-4-20250514",
-    "claude-3-5-sonnet-20241022",
-    "claude-3-5-haiku-20241022",
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
   ];
   const modelId = allowedModels.includes(clientModel)
     ? clientModel
-    : "claude-sonnet-4-20250514";
+    : "claude-sonnet-4-6";
   const maxSteps = typeof clientMaxSteps === "number"
     ? Math.max(1, Math.min(100, clientMaxSteps))
     : 15;
