@@ -42,6 +42,7 @@ interface DiagramStore {
   createFolder: (name?: string) => Promise<string>;
   renameFolder: (id: string, name: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
+  setFolderClient: (id: string, clientId: string | null) => Promise<void>;
 }
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -275,6 +276,15 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, name }),
+    });
+    get().loadFolders();
+  },
+
+  setFolderClient: async (id: string, clientId: string | null) => {
+    await fetch("/api/folders", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, clientId }),
     });
     get().loadFolders();
   },

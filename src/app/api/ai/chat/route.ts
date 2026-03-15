@@ -17,6 +17,7 @@ import {
 import { NextResponse } from "next/server";
 import { getRequiredUser } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { getFolder } from "@/lib/db";
 import {
   listClients,
   getClient,
@@ -105,7 +106,21 @@ export async function POST(request: Request) {
   }
   log.done(200, "streaming AI response", { userId: user.id });
 
-  const { messages, currentCode } = await request.json();
+  const { messages, currentCode, folderId } = await request.json();
+
+  // If the diagram is in a folder with a bound client, pre-fetch context
+  let folderClientContext: string | null = null;
+  if (folderId && isFeedbackSystemConfigured()) {
+    try {
+      const folder = await getFolder(folderId, user.id);
+      if (folder?.clientId) {
+        const client = await getClient(folder.clientId);
+        folderClientContext = formatClientContext(client);
+      }
+    } catch {
+      // Non-fatal: folder client context is best-effort
+    }
+  }
 
   const anthropic = createAnthropic({ apiKey });
 
@@ -213,7 +228,7 @@ export async function POST(request: Request) {
 
   const result = streamText({
     model: anthropic("claude-sonnet-4-20250514"),
-    system: buildSystemPrompt(currentCode || ""),
+    system: buildSystemPrompt(currentCode || "", folderClientContext),
     messages,
     tools: { ...diagramTools, ...clientTools },
     maxSteps: 15,

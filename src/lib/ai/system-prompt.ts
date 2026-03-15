@@ -1,7 +1,7 @@
 import { mermaidToGraph } from "@/lib/parser/mermaid-to-graph";
 import { isConfigured as isFeedbackSystemConfigured } from "@/lib/feedback-system";
 
-export function buildSystemPrompt(currentCode: string): string {
+export function buildSystemPrompt(currentCode: string, folderClientContext?: string | null): string {
   const graph = mermaidToGraph(currentCode);
 
   let graphContext = "";
@@ -74,5 +74,12 @@ ${clientContextSection}
 - When the user asks to rename the diagram, use the updateMetadata tool.
 - When the user asks to export or download, use the exportDiagram tool.
 - When explaining or suggesting, respond with text — no tool call needed.
-- Always update the title with updateMetadata AND build/modify the diagram in the same response.`;
+- Always update the title with updateMetadata AND build/modify the diagram in the same response.${folderClientContext ? `
+
+## Active Client Context
+This folder is bound to a specific client. The client's data has been pre-loaded for you:
+
+${folderClientContext}
+
+Use this client context automatically when building or modifying diagrams. You do not need to call getClientContext for this client — the data is already available above. You may still use listClients/getClientContext to look up other clients if needed.` : ""}`;
 }

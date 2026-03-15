@@ -42,6 +42,7 @@ function maybeEndBatch() {
 
 export function ChatPanel() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
+  const folderId = useDiagramStore((s) => s.diagram?.folderId ?? null);
   const title = useDiagramStore((s) => s.diagram?.title ?? "diagram");
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showDone, setShowDone] = useState(false);
@@ -49,7 +50,7 @@ export function ChatPanel() {
   const { messages, input, handleInputChange, handleSubmit, status } =
     useChat({
       api: "/api/ai/chat",
-      body: { currentCode: code },
+      body: { currentCode: code, folderId },
       onToolCall: async ({ toolCall }) => {
         pendingToolCalls++;
         try {

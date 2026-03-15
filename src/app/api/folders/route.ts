@@ -25,6 +25,7 @@ export async function GET() {
 
 const createSchema = z.object({
   name: z.string().min(1).max(200).optional().default("New Folder"),
+  clientId: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -41,13 +42,14 @@ export async function POST(request: Request) {
   }
 
   const id = generateId();
-  const folder = await createFolder(id, parsed.data.name, user.id);
+  const folder = await createFolder(id, parsed.data.name, user.id, parsed.data.clientId);
   return NextResponse.json(folder, { status: 201 });
 }
 
 const updateSchema = z.object({
   id: z.string(),
-  name: z.string().min(1).max(200),
+  name: z.string().min(1).max(200).optional(),
+  clientId: z.string().nullable().optional(),
 });
 
 export async function PUT(request: Request) {
@@ -63,7 +65,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: parsed.error.message }, { status: 400 });
   }
 
-  await updateFolder(parsed.data.id, parsed.data.name, user.id);
+  await updateFolder(parsed.data.id, { name: parsed.data.name, clientId: parsed.data.clientId }, user.id);
   return NextResponse.json({ ok: true });
 }
 
