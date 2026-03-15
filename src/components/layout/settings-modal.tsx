@@ -162,8 +162,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 AI Model
               </label>
               <p className="text-xs text-[var(--muted-foreground)] mb-3">
-                Choose the Claude model for AI chat. Sonnet 4 is most capable;
-                Haiku is faster and cheaper.
+                Choose the Claude model for AI chat. Opus 4.6 is most capable;
+                Sonnet 4.6 is faster and cheaper.
               </p>
               <select
                 value={aiModel}
