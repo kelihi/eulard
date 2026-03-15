@@ -9,7 +9,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const log = logger.apiRequest("GET", `/api/diagrams/${id}`);
+  const requestId = _request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("GET", `/api/diagrams/${id}`, { requestId });
   try {
     const user = await getRequiredUser();
     if (!user) {
@@ -45,7 +46,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const log = logger.apiRequest("PUT", `/api/diagrams/${id}`);
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("PUT", `/api/diagrams/${id}`, { requestId });
   try {
     const user = await getRequiredUser();
     if (!user) {
@@ -87,7 +89,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const log = logger.apiRequest("DELETE", `/api/diagrams/${id}`);
+  const requestId = _request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("DELETE", `/api/diagrams/${id}`, { requestId });
   try {
     const user = await getRequiredUser();
     if (!user) {

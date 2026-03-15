@@ -5,8 +5,9 @@ import { getRequiredUser } from "@/lib/auth";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
-export async function GET() {
-  const log = logger.apiRequest("GET", "/api/diagrams");
+export async function GET(request: Request) {
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("GET", "/api/diagrams", { requestId });
   try {
     const user = await getRequiredUser();
     if (!user) {
@@ -34,7 +35,8 @@ const createSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const log = logger.apiRequest("POST", "/api/diagrams");
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("POST", "/api/diagrams", { requestId });
   try {
     const user = await getRequiredUser();
     if (!user) {

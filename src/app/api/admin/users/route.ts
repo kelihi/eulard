@@ -26,57 +26,73 @@ const inviteSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const log = logger.apiRequest("POST", "/api/admin/users");
-  const admin = await requireAdmin();
-  if (!admin) {
-    log.done(403, "forbidden");
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("POST", "/api/admin/users", { requestId });
+  try {
+    const admin = await requireAdmin();
+    if (!admin) {
+      log.done(403, "forbidden");
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const parsed = inviteSchema.safeParse(body);
+
+    if (!parsed.success) {
+      log.done(400, "validation error", { userId: admin.id });
+      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    const existing = await getUserByEmail(parsed.data.email);
+    if (existing) {
+      log.done(409, "user already exists", { userId: admin.id });
+      return NextResponse.json({ error: "User with this email already exists" }, { status: 409 });
+    }
+
+    const passwordHash = await hash(parsed.data.password, 12);
+    const user = await createUser(
+      generateId(),
+      parsed.data.email,
+      parsed.data.name,
+      passwordHash
+    );
+
+    log.done(201, `created user ${parsed.data.email}`, { userId: admin.id });
+    return NextResponse.json(user, { status: 201 });
+  } catch (err) {
+    log.fail(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-
-  const body = await request.json();
-  const parsed = inviteSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
-  }
-
-  const existing = await getUserByEmail(parsed.data.email);
-  if (existing) {
-    return NextResponse.json({ error: "User with this email already exists" }, { status: 409 });
-  }
-
-  const passwordHash = await hash(parsed.data.password, 12);
-  const user = await createUser(
-    generateId(),
-    parsed.data.email,
-    parsed.data.name,
-    passwordHash
-  );
-
-  log.done(201, `created user ${parsed.data.email}`, { userId: admin.id });
-  return NextResponse.json(user, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
-  const log = logger.apiRequest("DELETE", "/api/admin/users");
-  const admin = await requireAdmin();
-  if (!admin) {
-    log.done(403, "forbidden");
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("DELETE", "/api/admin/users", { requestId });
+  try {
+    const admin = await requireAdmin();
+    if (!admin) {
+      log.done(403, "forbidden");
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      log.done(400, "missing user id", { userId: admin.id });
+      return NextResponse.json({ error: "Missing user id" }, { status: 400 });
+    }
+
+    if (id === admin.id) {
+      log.done(400, "cannot delete self", { userId: admin.id });
+      return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
+    }
+
+    await deleteUser(id);
+    log.done(200, `deleted user ${id}`, { userId: admin.id });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    log.fail(err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
-
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get("id");
-
-  if (!id) {
-    return NextResponse.json({ error: "Missing user id" }, { status: 400 });
-  }
-
-  if (id === admin.id) {
-    return NextResponse.json({ error: "Cannot delete yourself" }, { status: 400 });
-  }
-
-  await deleteUser(id);
-  log.done(200, `deleted user ${id}`, { userId: admin.id });
-  return NextResponse.json({ ok: true });
 }

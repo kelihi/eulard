@@ -14,6 +14,7 @@ import {
 } from "@/lib/ai/tools";
 import { NextResponse } from "next/server";
 import { getRequiredUser } from "@/lib/auth";
+import { getSetting } from "@/lib/db";
 import { logger } from "@/lib/logger";
 
 export const maxDuration = 60;
@@ -24,7 +25,10 @@ function getApiKey(): string | null {
 }
 
 export async function POST(request: Request) {
-  const log = logger.apiRequest("POST", "/api/ai/chat");
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("POST", "/api/ai/chat", { requestId });
+  const start = Date.now();
+
   const user = await getRequiredUser();
   if (!user) {
     log.done(401, "unauthorized");
@@ -39,7 +43,6 @@ export async function POST(request: Request) {
       { status: 401 }
     );
   }
-  log.done(200, "streaming AI response", { userId: user.id });
 
   const { messages, currentCode, maxSteps: clientMaxSteps, model: clientModel } = await request.json();
 
@@ -54,11 +57,22 @@ export async function POST(request: Request) {
     ? Math.max(1, Math.min(100, clientMaxSteps))
     : 15;
 
+  // Load custom system prompt from the database
+  const customPrompt = await getSetting("ai_system_prompt");
+
+  logger.info("ai-chat-started", {
+    requestId,
+    userId: user.id,
+    model: modelId,
+    messageCount: messages?.length ?? 0,
+    hasCurrentCode: !!currentCode,
+  });
+
   const anthropic = createAnthropic({ apiKey });
 
   const result = streamText({
     model: anthropic(modelId),
-    system: buildSystemPrompt(currentCode || ""),
+    system: buildSystemPrompt(currentCode || "", customPrompt),
     messages,
     tools: {
       addNodes: tool({
@@ -108,6 +122,24 @@ export async function POST(request: Request) {
       }),
     },
     maxSteps,
+    experimental_telemetry: { isEnabled: true },
+    onFinish({ usage, finishReason, steps }) {
+      const toolCalls = steps?.flatMap((s) => s.toolCalls ?? []) ?? [];
+      logger.info("ai-chat-completed", {
+        requestId,
+        userId: user.id,
+        model: modelId,
+        inputTokens: usage?.promptTokens,
+        outputTokens: usage?.completionTokens,
+        totalTokens: usage?.totalTokens,
+        finishReason,
+        toolCallCount: toolCalls.length,
+        toolNames: toolCalls.map((tc) => tc.toolName),
+        stepCount: steps?.length ?? 0,
+        durationMs: Date.now() - start,
+        messageCount: messages?.length ?? 0,
+      });
+    },
   });
 
   return result.toDataStreamResponse();

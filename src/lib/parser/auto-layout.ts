@@ -1,8 +1,27 @@
 import dagre from "dagre";
 import type { FlowchartGraph, FlowchartDirection } from "@/types/graph";
 
-const NODE_WIDTH = 172;
-const NODE_HEIGHT = 50;
+const DEFAULT_NODE_WIDTH = 172;
+const DEFAULT_NODE_HEIGHT = 50;
+
+/**
+ * Split a label on <br/>, <br>, or <br /> tags and return an array of lines.
+ */
+function splitLabel(label: string): string[] {
+  return label.split(/<br\s*\/?>/gi);
+}
+
+/**
+ * Estimate node dimensions based on label text.
+ * Accounts for <br/> line breaks.
+ */
+function estimateNodeSize(label: string): { width: number; height: number } {
+  const lines = splitLabel(label);
+  const longestLine = lines.reduce((max, line) => Math.max(max, line.length), 0);
+  const width = Math.max(DEFAULT_NODE_WIDTH, longestLine * 10 + 48);
+  const height = Math.max(DEFAULT_NODE_HEIGHT, lines.length * 24 + 20);
+  return { width, height };
+}
 
 /**
  * Apply dagre auto-layout to position nodes in a flowchart graph.
@@ -15,8 +34,11 @@ export function autoLayout(graph: FlowchartGraph): FlowchartGraph {
   const rankdir = directionToRankdir(graph.direction);
   g.setGraph({ rankdir, nodesep: 50, ranksep: 60 });
 
+  const nodeSizes = new Map<string, { width: number; height: number }>();
   for (const node of graph.nodes) {
-    g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+    const size = estimateNodeSize(node.label);
+    nodeSizes.set(node.id, size);
+    g.setNode(node.id, { width: size.width, height: size.height });
   }
 
   for (const edge of graph.edges) {
@@ -29,11 +51,12 @@ export function autoLayout(graph: FlowchartGraph): FlowchartGraph {
     ...graph,
     nodes: graph.nodes.map((node) => {
       const dagreNode = g.node(node.id);
+      const size = nodeSizes.get(node.id) ?? { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT };
       return {
         ...node,
         position: {
-          x: dagreNode.x - NODE_WIDTH / 2,
-          y: dagreNode.y - NODE_HEIGHT / 2,
+          x: dagreNode.x - size.width / 2,
+          y: dagreNode.y - size.height / 2,
         },
       };
     }),
