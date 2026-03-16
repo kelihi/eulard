@@ -42,16 +42,18 @@ export default function EditorPage() {
       const { diagram, isDirty } = useDiagramStore.getState();
       if (!diagram || !isDirty) return;
 
-      // Use sendBeacon for reliable save on page unload
-      const payload = JSON.stringify({
-        title: diagram.title,
-        code: diagram.code,
-        positions: diagram.positions,
-      });
-      navigator.sendBeacon(
-        `/api/diagrams/${diagram.id}`,
-        new Blob([payload], { type: "application/json" })
-      );
+      // Use fetch with keepalive for reliable save on page unload
+      // (sendBeacon only supports POST, but the API uses PUT)
+      fetch(`/api/diagrams/${diagram.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: diagram.title,
+          code: diagram.code,
+          positions: diagram.positions,
+        }),
+        keepalive: true,
+      }).catch(() => {});
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
