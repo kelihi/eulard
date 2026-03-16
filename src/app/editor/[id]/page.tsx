@@ -29,7 +29,34 @@ export default function EditorPage() {
       .catch(() => {
         router.replace("/");
       });
+
+    // Flush any pending save when navigating away from the editor
+    return () => {
+      useDiagramStore.getState().flushSave();
+    };
   }, [id, loadDiagram, router]);
+
+  // Save before full page unload (refresh, close tab, external navigation)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const { diagram, isDirty } = useDiagramStore.getState();
+      if (!diagram || !isDirty) return;
+
+      // Use sendBeacon for reliable save on page unload
+      const payload = JSON.stringify({
+        title: diagram.title,
+        code: diagram.code,
+        positions: diagram.positions,
+      });
+      navigator.sendBeacon(
+        `/api/diagrams/${diagram.id}`,
+        new Blob([payload], { type: "application/json" })
+      );
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   if (loading || !diagram) {
     return (
