@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { DiagramState, DiagramListItem, Folder } from "@/types/diagram";
+import type { DiagramStyles } from "@/types/graph";
 
 const MAX_HISTORY = 50;
 
@@ -25,6 +26,8 @@ interface DiagramStore {
   setCode: (code: string) => void;
   setTitle: (title: string) => void;
   setPositions: (positions: string) => void;
+  setStyleOverrides: (styles: DiagramStyles) => void;
+  getStyleOverrides: () => DiagramStyles;
   setSyncState: (state: DiagramStore["syncState"]) => void;
   setError: (error: string | null) => void;
 
@@ -127,6 +130,24 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     scheduleSave(get);
   },
 
+  setStyleOverrides: (styles: DiagramStyles) => {
+    const { diagram } = get();
+    if (!diagram) return;
+    const styleOverrides = JSON.stringify(styles);
+    set({ diagram: { ...diagram, styleOverrides }, isDirty: true });
+    scheduleSave(get);
+  },
+
+  getStyleOverrides: (): DiagramStyles => {
+    const { diagram } = get();
+    if (!diagram?.styleOverrides) return {};
+    try {
+      return JSON.parse(diagram.styleOverrides) as DiagramStyles;
+    } catch {
+      return {};
+    }
+  },
+
   setSyncState: (syncState) => set({ syncState }),
   setError: (error) => set({ error }),
 
@@ -209,6 +230,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
           title: diagram.title,
           code: diagram.code,
           positions: diagram.positions,
+          styleOverrides: diagram.styleOverrides,
         }),
       });
       set({ isDirty: false, syncState: "idle" });

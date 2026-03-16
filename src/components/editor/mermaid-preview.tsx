@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
+import type { DiagramStyles } from "@/types/graph";
 import {
   ZoomIn,
   ZoomOut,
@@ -55,8 +56,150 @@ function parseSubgraphs(code: string): SubgraphSection[] {
   return sections;
 }
 
+/** Build CSS rules from diagram styles and inject into SVG */
+function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
+  // Remove any previously injected style element
+  const existingStyle = svgEl.querySelector("style[data-eulard-styles]");
+  if (existingStyle) existingStyle.remove();
+
+  const rules: string[] = [];
+  const gNode = styles.globalNode;
+  const gEdge = styles.globalEdge;
+
+  // Global node styles - target Mermaid's node containers
+  if (gNode) {
+    const nodeRectRules: string[] = [];
+    const nodeLabelRules: string[] = [];
+
+    if (gNode.backgroundColor)
+      nodeRectRules.push(`fill: ${gNode.backgroundColor} !important`);
+    if (gNode.borderColor)
+      nodeRectRules.push(`stroke: ${gNode.borderColor} !important`);
+    if (nodeRectRules.length > 0) {
+      rules.push(
+        `.node rect, .node polygon, .node circle, .node ellipse, .node path { ${nodeRectRules.join("; ")} }`
+      );
+    }
+
+    if (gNode.fontFamily)
+      nodeLabelRules.push(`font-family: ${gNode.fontFamily} !important`);
+    if (gNode.fontSize)
+      nodeLabelRules.push(`font-size: ${gNode.fontSize}px !important`);
+    if (gNode.fontColor)
+      nodeLabelRules.push(`color: ${gNode.fontColor} !important; fill: ${gNode.fontColor} !important`);
+    if (nodeLabelRules.length > 0) {
+      rules.push(
+        `.node .nodeLabel, .node .label { ${nodeLabelRules.join("; ")} }`
+      );
+    }
+  }
+
+  // Global edge styles
+  if (gEdge) {
+    const edgePathRules: string[] = [];
+    const edgeLabelRules: string[] = [];
+
+    if (gEdge.lineColor)
+      edgePathRules.push(`stroke: ${gEdge.lineColor} !important`);
+    if (gEdge.lineThickness)
+      edgePathRules.push(`stroke-width: ${gEdge.lineThickness}px !important`);
+    if (edgePathRules.length > 0) {
+      rules.push(
+        `.edgePath path, .flowchart-link { ${edgePathRules.join("; ")} }`
+      );
+      // Also style arrowheads to match
+      if (gEdge.lineColor) {
+        rules.push(
+          `marker path, .arrowheadPath { fill: ${gEdge.lineColor} !important; stroke: ${gEdge.lineColor} !important }`
+        );
+      }
+    }
+
+    if (gEdge.fontFamily)
+      edgeLabelRules.push(`font-family: ${gEdge.fontFamily} !important`);
+    if (gEdge.fontSize)
+      edgeLabelRules.push(`font-size: ${gEdge.fontSize}px !important`);
+    if (gEdge.fontColor)
+      edgeLabelRules.push(`color: ${gEdge.fontColor} !important; fill: ${gEdge.fontColor} !important`);
+    if (edgeLabelRules.length > 0) {
+      rules.push(
+        `.edgeLabel, .edgeLabel .label, .edgeLabel span { ${edgeLabelRules.join("; ")} }`
+      );
+    }
+  }
+
+  // Per-node overrides
+  if (styles.nodes) {
+    for (const [nodeId, ns] of Object.entries(styles.nodes)) {
+      const rectRules: string[] = [];
+      const labelRules: string[] = [];
+
+      if (ns.backgroundColor)
+        rectRules.push(`fill: ${ns.backgroundColor} !important`);
+      if (ns.borderColor)
+        rectRules.push(`stroke: ${ns.borderColor} !important`);
+      if (rectRules.length > 0) {
+        rules.push(
+          `g[id*="flowchart-${nodeId}-"] rect, g[id*="flowchart-${nodeId}-"] polygon, g[id*="flowchart-${nodeId}-"] circle, g[id*="flowchart-${nodeId}-"] ellipse { ${rectRules.join("; ")} }`
+        );
+      }
+
+      if (ns.fontFamily)
+        labelRules.push(`font-family: ${ns.fontFamily} !important`);
+      if (ns.fontSize)
+        labelRules.push(`font-size: ${ns.fontSize}px !important`);
+      if (ns.fontColor)
+        labelRules.push(`color: ${ns.fontColor} !important; fill: ${ns.fontColor} !important`);
+      if (labelRules.length > 0) {
+        rules.push(
+          `g[id*="flowchart-${nodeId}-"] .nodeLabel, g[id*="flowchart-${nodeId}-"] .label { ${labelRules.join("; ")} }`
+        );
+      }
+    }
+  }
+
+  // Per-edge overrides
+  if (styles.edges) {
+    for (const [edgeId, es] of Object.entries(styles.edges)) {
+      // Mermaid edge IDs can be tricky, we use data attributes or class-based selectors
+      const pathRules: string[] = [];
+      const labelRules: string[] = [];
+
+      if (es.lineColor)
+        pathRules.push(`stroke: ${es.lineColor} !important`);
+      if (es.lineThickness)
+        pathRules.push(`stroke-width: ${es.lineThickness}px !important`);
+      if (pathRules.length > 0) {
+        rules.push(
+          `g[id*="${edgeId}"] path { ${pathRules.join("; ")} }`
+        );
+      }
+
+      if (es.fontFamily)
+        labelRules.push(`font-family: ${es.fontFamily} !important`);
+      if (es.fontSize)
+        labelRules.push(`font-size: ${es.fontSize}px !important`);
+      if (es.fontColor)
+        labelRules.push(`color: ${es.fontColor} !important; fill: ${es.fontColor} !important`);
+      if (labelRules.length > 0) {
+        rules.push(
+          `g[id*="${edgeId}"] .edgeLabel span { ${labelRules.join("; ")} }`
+        );
+      }
+    }
+  }
+
+  if (rules.length === 0) return;
+
+  const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  styleEl.setAttribute("data-eulard-styles", "true");
+  styleEl.textContent = rules.join("\n");
+  svgEl.prepend(styleEl);
+}
+
 export function MermaidPreview() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
+  const styleOverridesJson = useDiagramStore((s) => s.diagram?.styleOverrides ?? null);
   const setError = useDiagramStore((s) => s.setError);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -158,6 +301,18 @@ export function MermaidPreview() {
 
         if (containerRef.current && generation === generationRef.current) {
           containerRef.current.innerHTML = clean;
+
+          // Apply style overrides to the rendered SVG
+          const svgEl = containerRef.current.querySelector("svg");
+          if (svgEl && styleOverridesJson) {
+            try {
+              const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
+              applyStylesToSvg(svgEl, styles);
+            } catch {
+              // ignore invalid JSON
+            }
+          }
+
           setParseError(null);
           setError(null);
         }
@@ -171,7 +326,27 @@ export function MermaidPreview() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [code, setError]);
+  }, [code, styleOverridesJson, setError]);
+
+  // Re-apply styles when styleOverrides changes without re-rendering
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const svgEl = containerRef.current.querySelector("svg");
+    if (!svgEl) return;
+
+    if (styleOverridesJson) {
+      try {
+        const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
+        applyStylesToSvg(svgEl, styles);
+      } catch {
+        // ignore invalid JSON
+      }
+    } else {
+      // Remove any injected styles
+      const existingStyle = svgEl.querySelector("style[data-eulard-styles]");
+      if (existingStyle) existingStyle.remove();
+    }
+  }, [styleOverridesJson]);
 
   // Zoom helpers
   const clampZoom = useCallback((z: number) => {

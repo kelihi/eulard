@@ -79,6 +79,7 @@ export async function initializeDatabase(): Promise<void> {
       title TEXT NOT NULL DEFAULT 'Untitled Diagram',
       code TEXT NOT NULL DEFAULT 'flowchart TB\n    A[Start] --> B[End]',
       positions TEXT,
+      style_overrides TEXT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -139,6 +140,19 @@ export async function initializeDatabase(): Promise<void> {
   await query("CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC)");
   await query("CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(session_id, created_at ASC)");
+
+  // Migration: add style_overrides column to existing diagrams tables
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'diagrams' AND column_name = 'style_overrides'
+      ) THEN
+        ALTER TABLE diagrams ADD COLUMN style_overrides TEXT;
+      END IF;
+    END $$;
+  `);
 }
 
 // --- Users ---
@@ -279,12 +293,13 @@ export async function getDiagram(id: string) {
     title: string;
     code: string;
     positions: string | null;
+    styleOverrides: string | null;
     userId: string;
     folderId: string | null;
     createdAt: string;
     updatedAt: string;
   }>(
-    'SELECT id, title, code, positions, user_id AS "userId", folder_id AS "folderId", created_at AS "createdAt", updated_at AS "updatedAt" FROM diagrams WHERE id = $1',
+    'SELECT id, title, code, positions, style_overrides AS "styleOverrides", user_id AS "userId", folder_id AS "folderId", created_at AS "createdAt", updated_at AS "updatedAt" FROM diagrams WHERE id = $1',
     [id]
   );
 }
@@ -305,7 +320,7 @@ export async function createDiagram(
 
 export async function updateDiagram(
   id: string,
-  data: { title?: string; code?: string; positions?: string | null; folderId?: string | null }
+  data: { title?: string; code?: string; positions?: string | null; styleOverrides?: string | null; folderId?: string | null }
 ) {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -322,6 +337,10 @@ export async function updateDiagram(
   if (data.positions !== undefined) {
     fields.push(`positions = $${paramIdx++}`);
     values.push(data.positions);
+  }
+  if (data.styleOverrides !== undefined) {
+    fields.push(`style_overrides = $${paramIdx++}`);
+    values.push(data.styleOverrides);
   }
   if (data.folderId !== undefined) {
     fields.push(`folder_id = $${paramIdx++}`);

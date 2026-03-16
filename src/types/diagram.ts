@@ -3,6 +3,7 @@ export interface DiagramState {
   title: string;
   code: string;
   positions: string | null;
+  styleOverrides: string | null;
   folderId: string | null;
   createdAt: string;
   updatedAt: string;
