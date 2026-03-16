@@ -63,5 +63,6 @@ export const config = {
     "/api/ai/:path*",
     "/api/shares/:path*",
     "/api/admin/:path*",
+    "/api/chat-sessions/:path*",
   ],
 };

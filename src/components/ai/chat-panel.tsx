@@ -75,6 +75,7 @@ export function ChatPanel() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [showSessionList, setShowSessionList] = useState(false);
   const sessionListRef = useRef<HTMLDivElement>(null);
+  const autoLoadedRef = useRef(false);
 
   // Load sessions for current diagram
   const loadSessions = useCallback(async () => {
@@ -151,7 +152,17 @@ export function ChatPanel() {
   useEffect(() => {
     setSessionId(null);
     setMessages([]);
+    setSessions([]);
+    autoLoadedRef.current = false;
   }, [diagramId, setMessages]);
+
+  // Auto-load the most recent session so users see their chat history
+  useEffect(() => {
+    if (sessions.length > 0 && !sessionId && !autoLoadedRef.current) {
+      autoLoadedRef.current = true;
+      loadSession(sessions[0].id);
+    }
+  }, [sessions, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load a previous session
   const loadSession = async (id: string) => {
