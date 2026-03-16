@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
+import type { DiagramStyles } from "@/types/graph";
 import {
   ZoomIn,
   ZoomOut,
@@ -55,8 +56,161 @@ function parseSubgraphs(code: string): SubgraphSection[] {
   return sections;
 }
 
+/** Sanitize a string for safe use as a CSS property value */
+function sanitizeCssValue(value: string): string {
+  return value.replace(/[;{}\\<>"'()]/g, "");
+}
+
+/** Sanitize a string for safe use in a CSS selector (e.g. inside [id*="..."] ) */
+function sanitizeCssSelector(value: string): string {
+  return value.replace(/[\\"'\[\]{}();:]/g, "");
+}
+
+/** Build CSS rules from diagram styles and inject into SVG */
+function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
+  // Remove any previously injected style element
+  const existingStyle = svgEl.querySelector("style[data-eulard-styles]");
+  if (existingStyle) existingStyle.remove();
+
+  const rules: string[] = [];
+  const gNode = styles.globalNode;
+  const gEdge = styles.globalEdge;
+
+  // Global node styles - target Mermaid's node containers
+  if (gNode) {
+    const nodeRectRules: string[] = [];
+    const nodeLabelRules: string[] = [];
+
+    if (gNode.backgroundColor)
+      nodeRectRules.push(`fill: ${sanitizeCssValue(gNode.backgroundColor)} !important`);
+    if (gNode.borderColor)
+      nodeRectRules.push(`stroke: ${sanitizeCssValue(gNode.borderColor)} !important`);
+    if (nodeRectRules.length > 0) {
+      rules.push(
+        `.node rect, .node polygon, .node circle, .node ellipse, .node path { ${nodeRectRules.join("; ")} }`
+      );
+    }
+
+    if (gNode.fontFamily)
+      nodeLabelRules.push(`font-family: ${sanitizeCssValue(gNode.fontFamily)} !important`);
+    if (gNode.fontSize)
+      nodeLabelRules.push(`font-size: ${sanitizeCssValue(String(gNode.fontSize))}px !important`);
+    if (gNode.fontColor)
+      nodeLabelRules.push(`color: ${sanitizeCssValue(gNode.fontColor)} !important; fill: ${sanitizeCssValue(gNode.fontColor)} !important`);
+    if (nodeLabelRules.length > 0) {
+      rules.push(
+        `.node .nodeLabel, .node .label { ${nodeLabelRules.join("; ")} }`
+      );
+    }
+  }
+
+  // Global edge styles
+  if (gEdge) {
+    const edgePathRules: string[] = [];
+    const edgeLabelRules: string[] = [];
+
+    if (gEdge.lineColor)
+      edgePathRules.push(`stroke: ${sanitizeCssValue(gEdge.lineColor)} !important`);
+    if (gEdge.lineThickness)
+      edgePathRules.push(`stroke-width: ${sanitizeCssValue(String(gEdge.lineThickness))}px !important`);
+    if (edgePathRules.length > 0) {
+      rules.push(
+        `.edgePath path, .flowchart-link { ${edgePathRules.join("; ")} }`
+      );
+      // Also style arrowheads to match
+      if (gEdge.lineColor) {
+        rules.push(
+          `marker path, .arrowheadPath { fill: ${sanitizeCssValue(gEdge.lineColor)} !important; stroke: ${sanitizeCssValue(gEdge.lineColor)} !important }`
+        );
+      }
+    }
+
+    if (gEdge.fontFamily)
+      edgeLabelRules.push(`font-family: ${sanitizeCssValue(gEdge.fontFamily)} !important`);
+    if (gEdge.fontSize)
+      edgeLabelRules.push(`font-size: ${sanitizeCssValue(String(gEdge.fontSize))}px !important`);
+    if (gEdge.fontColor)
+      edgeLabelRules.push(`color: ${sanitizeCssValue(gEdge.fontColor)} !important; fill: ${sanitizeCssValue(gEdge.fontColor)} !important`);
+    if (edgeLabelRules.length > 0) {
+      rules.push(
+        `.edgeLabel, .edgeLabel .label, .edgeLabel span { ${edgeLabelRules.join("; ")} }`
+      );
+    }
+  }
+
+  // Per-node overrides
+  if (styles.nodes) {
+    for (const [nodeId, ns] of Object.entries(styles.nodes)) {
+      const safeNodeId = sanitizeCssSelector(nodeId);
+      const rectRules: string[] = [];
+      const labelRules: string[] = [];
+
+      if (ns.backgroundColor)
+        rectRules.push(`fill: ${sanitizeCssValue(ns.backgroundColor)} !important`);
+      if (ns.borderColor)
+        rectRules.push(`stroke: ${sanitizeCssValue(ns.borderColor)} !important`);
+      if (rectRules.length > 0) {
+        rules.push(
+          `g[id*="flowchart-${safeNodeId}-"] rect, g[id*="flowchart-${safeNodeId}-"] polygon, g[id*="flowchart-${safeNodeId}-"] circle, g[id*="flowchart-${safeNodeId}-"] ellipse { ${rectRules.join("; ")} }`
+        );
+      }
+
+      if (ns.fontFamily)
+        labelRules.push(`font-family: ${sanitizeCssValue(ns.fontFamily)} !important`);
+      if (ns.fontSize)
+        labelRules.push(`font-size: ${sanitizeCssValue(String(ns.fontSize))}px !important`);
+      if (ns.fontColor)
+        labelRules.push(`color: ${sanitizeCssValue(ns.fontColor)} !important; fill: ${sanitizeCssValue(ns.fontColor)} !important`);
+      if (labelRules.length > 0) {
+        rules.push(
+          `g[id*="flowchart-${safeNodeId}-"] .nodeLabel, g[id*="flowchart-${safeNodeId}-"] .label { ${labelRules.join("; ")} }`
+        );
+      }
+    }
+  }
+
+  // Per-edge overrides
+  if (styles.edges) {
+    for (const [edgeId, es] of Object.entries(styles.edges)) {
+      const safeEdgeId = sanitizeCssSelector(edgeId);
+      const pathRules: string[] = [];
+      const labelRules: string[] = [];
+
+      if (es.lineColor)
+        pathRules.push(`stroke: ${sanitizeCssValue(es.lineColor)} !important`);
+      if (es.lineThickness)
+        pathRules.push(`stroke-width: ${sanitizeCssValue(String(es.lineThickness))}px !important`);
+      if (pathRules.length > 0) {
+        rules.push(
+          `g[id*="${safeEdgeId}"] path { ${pathRules.join("; ")} }`
+        );
+      }
+
+      if (es.fontFamily)
+        labelRules.push(`font-family: ${sanitizeCssValue(es.fontFamily)} !important`);
+      if (es.fontSize)
+        labelRules.push(`font-size: ${sanitizeCssValue(String(es.fontSize))}px !important`);
+      if (es.fontColor)
+        labelRules.push(`color: ${sanitizeCssValue(es.fontColor)} !important; fill: ${sanitizeCssValue(es.fontColor)} !important`);
+      if (labelRules.length > 0) {
+        rules.push(
+          `g[id*="${safeEdgeId}"] .edgeLabel span { ${labelRules.join("; ")} }`
+        );
+      }
+    }
+  }
+
+  if (rules.length === 0) return;
+
+  const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  styleEl.setAttribute("data-eulard-styles", "true");
+  styleEl.textContent = rules.join("\n");
+  svgEl.prepend(styleEl);
+}
+
 export function MermaidPreview() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
+  const styleOverridesJson = useDiagramStore((s) => s.diagram?.styleOverrides ?? null);
   const setError = useDiagramStore((s) => s.setError);
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -158,6 +312,18 @@ export function MermaidPreview() {
 
         if (containerRef.current && generation === generationRef.current) {
           containerRef.current.innerHTML = clean;
+
+          // Apply style overrides to the rendered SVG
+          const svgEl = containerRef.current.querySelector("svg");
+          if (svgEl && styleOverridesJson) {
+            try {
+              const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
+              applyStylesToSvg(svgEl, styles);
+            } catch {
+              // ignore invalid JSON
+            }
+          }
+
           setParseError(null);
           setError(null);
         }
@@ -171,7 +337,28 @@ export function MermaidPreview() {
     }, 300);
 
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- styleOverridesJson intentionally excluded; style-only updates handled by dedicated effect below
   }, [code, setError]);
+
+  // Re-apply styles when styleOverrides changes without re-rendering
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const svgEl = containerRef.current.querySelector("svg");
+    if (!svgEl) return;
+
+    if (styleOverridesJson) {
+      try {
+        const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
+        applyStylesToSvg(svgEl, styles);
+      } catch {
+        // ignore invalid JSON
+      }
+    } else {
+      // Remove any injected styles
+      const existingStyle = svgEl.querySelector("style[data-eulard-styles]");
+      if (existingStyle) existingStyle.remove();
+    }
+  }, [styleOverridesJson]);
 
   // Zoom helpers
   const clampZoom = useCallback((z: number) => {
