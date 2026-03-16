@@ -8,24 +8,11 @@ import { useDiagramStore } from "@/stores/diagram-store";
 import type { NodeStyleOverride, DiagramStyles } from "@/types/graph";
 
 /**
- * Split a label on <br/>, <br>, or <br /> tags and return an array of lines.
+ * Convert <br/> tags in a label to newline characters for rendering
+ * with CSS white-space: pre-line.
  */
-function splitLabel(label: string): string[] {
-  return label.split(/<br\s*\/?>/gi);
-}
-
-/**
- * Render a label with <br/> converted to actual line breaks.
- */
-function renderMultilineLabel(label: string): React.ReactNode {
-  const lines = splitLabel(label);
-  if (lines.length === 1) return label;
-  return lines.map((line, i) => (
-    <span key={i}>
-      {i > 0 && <br />}
-      {line}
-    </span>
-  ));
+function labelToDisplay(label: string): string {
+  return label.replace(/<br\s*\/?>/gi, "\n");
 }
 
 
@@ -102,8 +89,12 @@ function EditableLabel({
   }
 
   return (
-    <span onDoubleClick={handleDoubleClick} className="cursor-default select-none">
-      {renderMultilineLabel(label)}
+    <span
+      onDoubleClick={handleDoubleClick}
+      className="cursor-default select-none"
+      style={{ whiteSpace: "pre-line" }}
+    >
+      {labelToDisplay(label)}
     </span>
   );
 }

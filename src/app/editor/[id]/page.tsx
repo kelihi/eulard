@@ -29,7 +29,36 @@ export default function EditorPage() {
       .catch(() => {
         router.replace("/");
       });
+
+    // Flush any pending save when navigating away from the editor
+    return () => {
+      useDiagramStore.getState().flushSave();
+    };
   }, [id, loadDiagram, router]);
+
+  // Save before full page unload (refresh, close tab, external navigation)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const { diagram, isDirty } = useDiagramStore.getState();
+      if (!diagram || !isDirty) return;
+
+      // Use fetch with keepalive for reliable save on page unload
+      // (sendBeacon only supports POST, but the API uses PUT)
+      fetch(`/api/diagrams/${diagram.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: diagram.title,
+          code: diagram.code,
+          positions: diagram.positions,
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
 
   if (loading || !diagram) {
     return (

@@ -30,6 +30,7 @@ interface DiagramStore {
   getStyleOverrides: () => DiagramStyles;
   setSyncState: (state: DiagramStore["syncState"]) => void;
   setError: (error: string | null) => void;
+  flushSave: () => Promise<void>;
 
   undo: () => void;
   redo: () => void;
@@ -150,6 +151,14 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
 
   setSyncState: (syncState) => set({ syncState }),
   setError: (error) => set({ error }),
+
+  flushSave: async () => {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+      saveTimeout = null;
+    }
+    await get().saveDiagram();
+  },
 
   undo: () => {
     const { diagram, undoStack, redoStack } = get();
