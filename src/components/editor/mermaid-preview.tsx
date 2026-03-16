@@ -56,6 +56,16 @@ function parseSubgraphs(code: string): SubgraphSection[] {
   return sections;
 }
 
+/** Sanitize a string for safe use as a CSS property value */
+function sanitizeCssValue(value: string): string {
+  return value.replace(/[;{}\\<>"'()]/g, "");
+}
+
+/** Sanitize a string for safe use in a CSS selector (e.g. inside [id*="..."] ) */
+function sanitizeCssSelector(value: string): string {
+  return value.replace(/[\\"'\[\]{}();:]/g, "");
+}
+
 /** Build CSS rules from diagram styles and inject into SVG */
 function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
   // Remove any previously injected style element
@@ -72,9 +82,9 @@ function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
     const nodeLabelRules: string[] = [];
 
     if (gNode.backgroundColor)
-      nodeRectRules.push(`fill: ${gNode.backgroundColor} !important`);
+      nodeRectRules.push(`fill: ${sanitizeCssValue(gNode.backgroundColor)} !important`);
     if (gNode.borderColor)
-      nodeRectRules.push(`stroke: ${gNode.borderColor} !important`);
+      nodeRectRules.push(`stroke: ${sanitizeCssValue(gNode.borderColor)} !important`);
     if (nodeRectRules.length > 0) {
       rules.push(
         `.node rect, .node polygon, .node circle, .node ellipse, .node path { ${nodeRectRules.join("; ")} }`
@@ -82,11 +92,11 @@ function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
     }
 
     if (gNode.fontFamily)
-      nodeLabelRules.push(`font-family: ${gNode.fontFamily} !important`);
+      nodeLabelRules.push(`font-family: ${sanitizeCssValue(gNode.fontFamily)} !important`);
     if (gNode.fontSize)
-      nodeLabelRules.push(`font-size: ${gNode.fontSize}px !important`);
+      nodeLabelRules.push(`font-size: ${sanitizeCssValue(String(gNode.fontSize))}px !important`);
     if (gNode.fontColor)
-      nodeLabelRules.push(`color: ${gNode.fontColor} !important; fill: ${gNode.fontColor} !important`);
+      nodeLabelRules.push(`color: ${sanitizeCssValue(gNode.fontColor)} !important; fill: ${sanitizeCssValue(gNode.fontColor)} !important`);
     if (nodeLabelRules.length > 0) {
       rules.push(
         `.node .nodeLabel, .node .label { ${nodeLabelRules.join("; ")} }`
@@ -100,9 +110,9 @@ function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
     const edgeLabelRules: string[] = [];
 
     if (gEdge.lineColor)
-      edgePathRules.push(`stroke: ${gEdge.lineColor} !important`);
+      edgePathRules.push(`stroke: ${sanitizeCssValue(gEdge.lineColor)} !important`);
     if (gEdge.lineThickness)
-      edgePathRules.push(`stroke-width: ${gEdge.lineThickness}px !important`);
+      edgePathRules.push(`stroke-width: ${sanitizeCssValue(String(gEdge.lineThickness))}px !important`);
     if (edgePathRules.length > 0) {
       rules.push(
         `.edgePath path, .flowchart-link { ${edgePathRules.join("; ")} }`
@@ -110,17 +120,17 @@ function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
       // Also style arrowheads to match
       if (gEdge.lineColor) {
         rules.push(
-          `marker path, .arrowheadPath { fill: ${gEdge.lineColor} !important; stroke: ${gEdge.lineColor} !important }`
+          `marker path, .arrowheadPath { fill: ${sanitizeCssValue(gEdge.lineColor)} !important; stroke: ${sanitizeCssValue(gEdge.lineColor)} !important }`
         );
       }
     }
 
     if (gEdge.fontFamily)
-      edgeLabelRules.push(`font-family: ${gEdge.fontFamily} !important`);
+      edgeLabelRules.push(`font-family: ${sanitizeCssValue(gEdge.fontFamily)} !important`);
     if (gEdge.fontSize)
-      edgeLabelRules.push(`font-size: ${gEdge.fontSize}px !important`);
+      edgeLabelRules.push(`font-size: ${sanitizeCssValue(String(gEdge.fontSize))}px !important`);
     if (gEdge.fontColor)
-      edgeLabelRules.push(`color: ${gEdge.fontColor} !important; fill: ${gEdge.fontColor} !important`);
+      edgeLabelRules.push(`color: ${sanitizeCssValue(gEdge.fontColor)} !important; fill: ${sanitizeCssValue(gEdge.fontColor)} !important`);
     if (edgeLabelRules.length > 0) {
       rules.push(
         `.edgeLabel, .edgeLabel .label, .edgeLabel span { ${edgeLabelRules.join("; ")} }`
@@ -131,28 +141,29 @@ function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
   // Per-node overrides
   if (styles.nodes) {
     for (const [nodeId, ns] of Object.entries(styles.nodes)) {
+      const safeNodeId = sanitizeCssSelector(nodeId);
       const rectRules: string[] = [];
       const labelRules: string[] = [];
 
       if (ns.backgroundColor)
-        rectRules.push(`fill: ${ns.backgroundColor} !important`);
+        rectRules.push(`fill: ${sanitizeCssValue(ns.backgroundColor)} !important`);
       if (ns.borderColor)
-        rectRules.push(`stroke: ${ns.borderColor} !important`);
+        rectRules.push(`stroke: ${sanitizeCssValue(ns.borderColor)} !important`);
       if (rectRules.length > 0) {
         rules.push(
-          `g[id*="flowchart-${nodeId}-"] rect, g[id*="flowchart-${nodeId}-"] polygon, g[id*="flowchart-${nodeId}-"] circle, g[id*="flowchart-${nodeId}-"] ellipse { ${rectRules.join("; ")} }`
+          `g[id*="flowchart-${safeNodeId}-"] rect, g[id*="flowchart-${safeNodeId}-"] polygon, g[id*="flowchart-${safeNodeId}-"] circle, g[id*="flowchart-${safeNodeId}-"] ellipse { ${rectRules.join("; ")} }`
         );
       }
 
       if (ns.fontFamily)
-        labelRules.push(`font-family: ${ns.fontFamily} !important`);
+        labelRules.push(`font-family: ${sanitizeCssValue(ns.fontFamily)} !important`);
       if (ns.fontSize)
-        labelRules.push(`font-size: ${ns.fontSize}px !important`);
+        labelRules.push(`font-size: ${sanitizeCssValue(String(ns.fontSize))}px !important`);
       if (ns.fontColor)
-        labelRules.push(`color: ${ns.fontColor} !important; fill: ${ns.fontColor} !important`);
+        labelRules.push(`color: ${sanitizeCssValue(ns.fontColor)} !important; fill: ${sanitizeCssValue(ns.fontColor)} !important`);
       if (labelRules.length > 0) {
         rules.push(
-          `g[id*="flowchart-${nodeId}-"] .nodeLabel, g[id*="flowchart-${nodeId}-"] .label { ${labelRules.join("; ")} }`
+          `g[id*="flowchart-${safeNodeId}-"] .nodeLabel, g[id*="flowchart-${safeNodeId}-"] .label { ${labelRules.join("; ")} }`
         );
       }
     }
@@ -161,29 +172,29 @@ function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
   // Per-edge overrides
   if (styles.edges) {
     for (const [edgeId, es] of Object.entries(styles.edges)) {
-      // Mermaid edge IDs can be tricky, we use data attributes or class-based selectors
+      const safeEdgeId = sanitizeCssSelector(edgeId);
       const pathRules: string[] = [];
       const labelRules: string[] = [];
 
       if (es.lineColor)
-        pathRules.push(`stroke: ${es.lineColor} !important`);
+        pathRules.push(`stroke: ${sanitizeCssValue(es.lineColor)} !important`);
       if (es.lineThickness)
-        pathRules.push(`stroke-width: ${es.lineThickness}px !important`);
+        pathRules.push(`stroke-width: ${sanitizeCssValue(String(es.lineThickness))}px !important`);
       if (pathRules.length > 0) {
         rules.push(
-          `g[id*="${edgeId}"] path { ${pathRules.join("; ")} }`
+          `g[id*="${safeEdgeId}"] path { ${pathRules.join("; ")} }`
         );
       }
 
       if (es.fontFamily)
-        labelRules.push(`font-family: ${es.fontFamily} !important`);
+        labelRules.push(`font-family: ${sanitizeCssValue(es.fontFamily)} !important`);
       if (es.fontSize)
-        labelRules.push(`font-size: ${es.fontSize}px !important`);
+        labelRules.push(`font-size: ${sanitizeCssValue(String(es.fontSize))}px !important`);
       if (es.fontColor)
-        labelRules.push(`color: ${es.fontColor} !important; fill: ${es.fontColor} !important`);
+        labelRules.push(`color: ${sanitizeCssValue(es.fontColor)} !important; fill: ${sanitizeCssValue(es.fontColor)} !important`);
       if (labelRules.length > 0) {
         rules.push(
-          `g[id*="${edgeId}"] .edgeLabel span { ${labelRules.join("; ")} }`
+          `g[id*="${safeEdgeId}"] .edgeLabel span { ${labelRules.join("; ")} }`
         );
       }
     }
@@ -326,7 +337,8 @@ export function MermaidPreview() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [code, styleOverridesJson, setError]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- styleOverridesJson intentionally excluded; style-only updates handled by dedicated effect below
+  }, [code, setError]);
 
   // Re-apply styles when styleOverrides changes without re-rendering
   useEffect(() => {
