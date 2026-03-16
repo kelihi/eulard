@@ -7,6 +7,11 @@ steps:
       - '-t'
       - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:latest'
       - '.'
+    id: 'build'
+
 images:
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:$SHORT_SHA'
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
