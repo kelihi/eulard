@@ -207,7 +207,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   loadDiagram: async (id: string) => {
     const res = await fetch(`/api/diagrams/${id}`);
     if (!res.ok) throw new Error("Failed to load diagram");
-    const diagram = await res.json();
+    const data = await res.json();
+    const diagram = { ...data, permission: data.permission ?? null };
     set({
       diagram,
       isDirty: false,

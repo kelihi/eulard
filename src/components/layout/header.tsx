@@ -23,6 +23,7 @@ export function Header({ onToggleChat, chatOpen, onToggleSidebar, sidebarOpen }:
   const setTitle = useDiagramStore((s) => s.setTitle);
   const saveDiagram = useDiagramStore((s) => s.saveDiagram);
   const diagramId = useDiagramStore((s) => s.diagram?.id);
+  const permission = useDiagramStore((s) => s.diagram?.permission);
 
   const [isEditing, setIsEditing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -189,7 +190,7 @@ export function Header({ onToggleChat, chatOpen, onToggleSidebar, sidebarOpen }:
           open={shareOpen}
           onClose={() => setShareOpen(false)}
           diagramId={diagramId}
-          isOwner={true}
+          isOwner={permission === "owner"}
         />
       )}
     </>
