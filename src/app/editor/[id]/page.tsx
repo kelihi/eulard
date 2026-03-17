@@ -19,6 +19,7 @@ export default function EditorPage() {
   const [chatOpen, setChatOpen] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useKeyboardShortcuts();
 
@@ -27,7 +28,8 @@ export default function EditorPage() {
     loadDiagram(id)
       .then(() => setLoading(false))
       .catch(() => {
-        router.replace("/");
+        setError("Failed to load diagram. It may have been deleted or you don't have access.");
+        setLoading(false);
       });
 
     // Flush any pending save when navigating away from the editor
@@ -59,6 +61,22 @@ export default function EditorPage() {
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
+
+  if (error) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center space-y-4 max-w-md px-4">
+          <p className="text-sm text-[var(--muted-foreground)]">{error}</p>
+          <button
+            onClick={() => router.replace("/")}
+            className="px-4 py-2 text-sm font-medium bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 transition-opacity"
+          >
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !diagram) {
     return (
