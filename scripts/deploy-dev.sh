@@ -104,6 +104,8 @@ else
     --service-account="${SERVICE_ACCOUNT}" \
     --allow-unauthenticated \
     --add-cloudsql-instances="${CLOUDSQL_CONNECTION}" \
+    --vpc-connector=chassis-vpc-cx-dev \
+    --vpc-egress=private-ranges-only \
     --port=3000 \
     --cpu=1 \
     --memory=512Mi \
