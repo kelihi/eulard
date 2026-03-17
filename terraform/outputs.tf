@@ -13,3 +13,8 @@ output "database_private_ip" {
 output "service_account_email" {
   value = google_service_account.eulard.email
 }
+
+output "cloud_run_dev_url" {
+  value       = google_cloud_run_v2_service.eulard_dev.uri
+  description = "Cloud Run dev instance URL"
+}
