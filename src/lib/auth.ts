@@ -2,7 +2,8 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { compare } from "bcryptjs";
-import { getUserByEmail, getUserById, createUser, updateUser } from "@/lib/db";
+import { createHash } from "crypto";
+import { getUserByEmail, getUserById, createUser, updateUser, getApiKeyByHash, touchApiKeyLastUsed } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
@@ -130,6 +131,32 @@ export async function getRequiredUser() {
 // Helper to check if user is admin
 export async function requireAdmin() {
   const user = await getRequiredUser();
+  if (!user || user.role !== "admin") {
+    return null;
+  }
+  return user;
+}
+
+// Dual-mode auth: API key (Bearer token) or session cookie
+export async function authenticateRequest(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer eul_")) {
+    const rawKey = authHeader.slice(7);
+    const keyHash = createHash("sha256").update(rawKey).digest("hex");
+    const apiKey = await getApiKeyByHash(keyHash);
+    if (!apiKey) {
+      return null;
+    }
+    // Fire-and-forget last_used_at update
+    touchApiKeyLastUsed(apiKey.id).catch(() => {});
+    return getUserById(apiKey.userId);
+  }
+  return getRequiredUser();
+}
+
+// Dual-mode admin check
+export async function requireAdminFromRequest(request: Request) {
+  const user = await authenticateRequest(request);
   if (!user || user.role !== "admin") {
     return null;
   }
