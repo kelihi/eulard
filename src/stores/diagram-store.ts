@@ -245,7 +245,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
       });
       set({ isDirty: false, syncState: "idle" });
       get().loadDiagrams();
-    } catch {
+    } catch (err) {
+      console.error("Failed to save diagram:", err);
       set({ syncState: "idle" });
     }
   },
