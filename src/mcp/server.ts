@@ -273,6 +273,7 @@ server.resource(
 // ===== START =====
 
 async function main() {
+  console.error("[DEPRECATED] The MCP server is deprecated. Use Claude Code skills (/eulard-create, /eulard-list, etc.) or the REST API directly instead.");
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error("Eulard MCP server running on stdio");
