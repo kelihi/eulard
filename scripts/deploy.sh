@@ -55,6 +55,8 @@ gcloud builds submit --config=cloudbuild.yaml --project="${PROJECT}" .
 echo ""
 echo "==> Step 6: Deploy app and ingress"
 kubectl apply -f "${ROOT_DIR}/k8s/"
+kubectl apply -f "${ROOT_DIR}/k8s/hpa.yaml"
+kubectl apply -f "${ROOT_DIR}/k8s/pdb.yaml"
 
 # 7. Show status
 echo ""
