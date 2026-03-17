@@ -432,7 +432,7 @@ export default function AdminPage() {
             API Keys
           </h2>
           <p className="text-xs text-[var(--muted-foreground)] mb-4">
-            API keys allow external tools (like Claude Code or Claude Desktop) to access eulard on your behalf via the MCP server.
+            API keys allow external tools and scripts to access eulard on your behalf via the REST API.
           </p>
 
           {/* New key reveal */}
