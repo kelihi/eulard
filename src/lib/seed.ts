@@ -1,5 +1,6 @@
+import { randomBytes } from "crypto";
 import { hash } from "bcryptjs";
-import { getUserByEmail, createUser, initializeDatabase } from "@/lib/db";
+import { getUserByEmail, createUser, updateUser, initializeDatabase } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
@@ -14,12 +15,15 @@ export async function seedDatabase(): Promise<void> {
     const existing = await getUserByEmail(adminEmail);
 
     if (!existing) {
-      const defaultPassword = process.env.ADMIN_DEFAULT_PASSWORD || "changeme123";
+      let defaultPassword = process.env.ADMIN_DEFAULT_PASSWORD;
+      if (!defaultPassword) {
+        defaultPassword = randomBytes(16).toString("base64url");
+        logger.warn("ADMIN_DEFAULT_PASSWORD not set — generated random password for admin user", { email: adminEmail });
+      }
       const passwordHash = await hash(defaultPassword, 12);
       await createUser(generateId(), adminEmail, adminEmail.split("@")[0], passwordHash, "admin");
       logger.info("admin user created", { email: adminEmail });
     } else if (existing.role !== "admin") {
-      const { updateUser } = await import("@/lib/db");
       await updateUser(existing.id, { role: "admin" });
       logger.info("promoted existing user to admin", { email: adminEmail });
     }
