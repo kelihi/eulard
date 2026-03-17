@@ -7,7 +7,12 @@ metadata:
     app.kubernetes.io/part-of: eulard
     app.kubernetes.io/component: web
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: eulard-web
@@ -48,13 +53,13 @@ spec:
               memory: 2Gi
           readinessProbe:
             httpGet:
-              path: /api/init
+              path: /api/healthz
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /api/init
+              path: /api/healthz
               port: 3000
             initialDelaySeconds: 30
             periodSeconds: 30

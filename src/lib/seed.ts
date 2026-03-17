@@ -3,8 +3,10 @@ import { hash } from "bcryptjs";
 import { getUserByEmail, createUser, updateUser, initializeDatabase } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { validateEnv } from "@/lib/env";
 
 export async function seedDatabase(): Promise<void> {
+  validateEnv();
   await initializeDatabase();
 
   // Seed admin users if not exists

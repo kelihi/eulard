@@ -14,6 +14,11 @@ function getPool(): pg.Pool {
       password: process.env.DB_PASSWORD || "",
       ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
       max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+    _pool.on('error', (err) => {
+      console.error('Unexpected database pool error:', err);
     });
   }
   return _pool;
