@@ -6,13 +6,15 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "mcp": "tsx src/mcp/server.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.0",
     "@ai-sdk/react": "^1.2.0",
     "@codemirror/lang-markdown": "^6.3.2",
     "@codemirror/theme-one-dark": "^6.1.2",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "@uiw/react-codemirror": "^4.23.0",
     "@xyflow/react": "^12.10.1",
     "ai": "^4.3.0",
@@ -45,6 +47,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.3.0",
     "tailwindcss": "^4.1.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0"
   },
   "pnpm": {

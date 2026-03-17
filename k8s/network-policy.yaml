@@ -1,0 +1,60 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: eulard-network-policy
+  namespace: eulard
+  labels:
+    app.kubernetes.io/part-of: eulard
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # GCE load balancer health checks
+    - from:
+        - ipBlock:
+            cidr: 130.211.0.0/22
+        - ipBlock:
+            cidr: 35.191.0.0/16
+      ports:
+        - port: 3000
+          protocol: TCP
+    # GKE ingress controller and other namespaces
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - port: 3000
+          protocol: TCP
+  egress:
+    # DNS (kube-dns in kube-system)
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Cloud SQL private IP
+    - to:
+        - ipBlock:
+            cidr: 10.248.0.0/16
+      ports:
+        - port: 5432
+          protocol: TCP
+    # GCP metadata server (Workload Identity token exchange)
+    - to:
+        - ipBlock:
+            cidr: 169.254.169.254/32
+      ports:
+        - port: 80
+          protocol: TCP
+    # Google APIs (OAuth, Secret Manager) and Anthropic API over HTTPS
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP

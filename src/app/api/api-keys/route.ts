@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { listDiagrams, createDiagram } from "@/lib/db";
+import { createHash, randomBytes } from "crypto";
 import { authenticateRequest } from "@/lib/auth";
+import { createApiKey, listApiKeys } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
 export async function GET(request: Request) {
-  const requestId = request.headers.get("x-request-id") ?? undefined;
-  const log = logger.apiRequest("GET", "/api/diagrams", { requestId });
+  const log = logger.apiRequest("GET", "/api/api-keys");
   try {
     const user = await authenticateRequest(request);
     if (!user) {
@@ -15,9 +15,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const diagrams = await listDiagrams(user.id, user.email);
-    log.done(200, `listed ${diagrams.length} diagrams`, { userId: user.id });
-    return NextResponse.json(diagrams);
+    const keys = await listApiKeys(user.id);
+    log.done(200, `listed ${keys.length} API keys`, { userId: user.id });
+    return NextResponse.json(keys);
   } catch (err) {
     log.fail(err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -25,18 +25,12 @@ export async function GET(request: Request) {
 }
 
 const createSchema = z.object({
-  title: z.string().min(1).max(200).optional().default("Untitled Diagram"),
-  code: z
-    .string()
-    .max(50000)
-    .optional()
-    .default("flowchart TB\n    A[Start] --> B[End]"),
-  folderId: z.string().optional(),
+  name: z.string().min(1).max(200).optional().default("Unnamed Key"),
+  expiresAt: z.string().optional(),
 });
 
 export async function POST(request: Request) {
-  const requestId = request.headers.get("x-request-id") ?? undefined;
-  const log = logger.apiRequest("POST", "/api/diagrams", { requestId });
+  const log = logger.apiRequest("POST", "/api/api-keys");
   try {
     const user = await authenticateRequest(request);
     if (!user) {
@@ -46,22 +40,37 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const parsed = createSchema.safeParse(body);
-
     if (!parsed.success) {
       log.done(400, "validation error");
       return NextResponse.json({ error: parsed.error.message }, { status: 400 });
     }
 
     const id = generateId();
-    const diagram = await createDiagram(
+    const rawKey = `eul_${randomBytes(16).toString("hex")}`;
+    const keyHash = createHash("sha256").update(rawKey).digest("hex");
+    const keyPrefix = rawKey.slice(0, 8);
+
+    await createApiKey(
       id,
-      parsed.data.title,
-      parsed.data.code,
       user.id,
-      parsed.data.folderId
+      parsed.data.name,
+      keyHash,
+      keyPrefix,
+      parsed.data.expiresAt
     );
-    log.done(201, `created diagram ${id}`, { userId: user.id });
-    return NextResponse.json(diagram, { status: 201 });
+
+    log.done(201, `created API key ${keyPrefix}...`, { userId: user.id });
+    return NextResponse.json(
+      {
+        id,
+        name: parsed.data.name,
+        key: rawKey,
+        keyPrefix,
+        createdAt: new Date().toISOString(),
+        expiresAt: parsed.data.expiresAt ?? null,
+      },
+      { status: 201 }
+    );
   } catch (err) {
     log.fail(err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { hash } from "bcryptjs";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminFromRequest } from "@/lib/auth";
 import { listUsers, createUser, deleteUser, getUserByEmail } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
-export async function GET() {
+export async function GET(request: Request) {
   const log = logger.apiRequest("GET", "/api/admin/users");
-  const admin = await requireAdmin();
+  const admin = await requireAdminFromRequest(request);
   if (!admin) {
     log.done(403, "forbidden");
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("POST", "/api/admin/users", { requestId });
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdminFromRequest(request);
     if (!admin) {
       log.done(403, "forbidden");
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -69,7 +69,7 @@ export async function DELETE(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("DELETE", "/api/admin/users", { requestId });
   try {
-    const admin = await requireAdmin();
+    const admin = await requireAdminFromRequest(request);
     if (!admin) {
       log.done(403, "forbidden");
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

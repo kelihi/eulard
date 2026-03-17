@@ -28,6 +28,21 @@ export function middleware(request: NextRequest) {
     request.cookies.get("__Secure-authjs.session-token")?.value;
 
   if (!token) {
+    // Allow API key auth through without redirect
+    const authHeader = request.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer eul_")) {
+      edgeLog("INFO", "middleware pass (api-key)", {
+        method: request.method,
+        path: pathname,
+        requestId,
+      });
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set("x-request-id", requestId);
+      const response = NextResponse.next({ request: { headers: requestHeaders } });
+      response.headers.set("x-request-id", requestId);
+      return response;
+    }
+
     edgeLog("INFO", "middleware redirect", {
       method: request.method,
       path: pathname,
@@ -64,5 +79,8 @@ export const config = {
     "/api/shares/:path*",
     "/api/admin/:path*",
     "/api/chat-sessions/:path*",
+    "/api/api-keys/:path*",
+    "/api/me",
+    "/api/users/:path*",
   ],
 };

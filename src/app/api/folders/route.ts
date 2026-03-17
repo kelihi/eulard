@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listFolders, createFolder, updateFolder, deleteFolder } from "@/lib/db";
-import { getRequiredUser } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
-export async function GET() {
+export async function GET(request: Request) {
   const log = logger.apiRequest("GET", "/api/folders");
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("POST", "/api/folders", { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -64,7 +64,7 @@ export async function PUT(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("PUT", "/api/folders", { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -95,7 +95,7 @@ export async function DELETE(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("DELETE", "/api/folders", { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
