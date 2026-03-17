@@ -114,12 +114,9 @@ else
     --set-env-vars="NODE_ENV=production" \
     --set-env-vars="NEXT_TELEMETRY_DISABLED=1" \
     --set-env-vars="HOSTNAME=0.0.0.0" \
-    --set-env-vars="PORT=3000" \
-    --set-env-vars="DB_HOST=127.0.0.1" \
-    --set-env-vars="DB_PORT=5432" \
+    --set-env-vars="INSTANCE_CONNECTION_NAME=kelihi-ai-platform:us-central1:chassis-db-dev" \
     --set-env-vars="DB_NAME=eulard" \
     --set-env-vars="DB_USER=eulard-app" \
-    --set-env-vars="DB_SSL=false" \
     --set-env-vars="AUTH_GOOGLE_ALLOWED_DOMAINS=kelihi.com" \
     --set-env-vars="AUTH_TRUST_HOST=true" \
     --set-secrets="DB_PASSWORD=eulard-db-password-dev:latest" \
