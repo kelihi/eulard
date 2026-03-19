@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
 import { ChatMessage } from "./chat-message";
 import { downloadPng, downloadSvg, downloadMermaidCode } from "@/lib/export";
@@ -70,12 +70,44 @@ export function ChatPanel() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
   const diagramId = useDiagramStore((s) => s.diagram?.id ?? "");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showDone, setShowDone] = useState(false);
+  const [sendMode, setSendMode] = useState<"cmd_enter" | "enter">("cmd_enter");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [showSessionList, setShowSessionList] = useState(false);
   const sessionListRef = useRef<HTMLDivElement>(null);
   const autoLoadedRef = useRef(false);
+
+  // Load user send-mode preference
+  useEffect(() => {
+    fetch("/api/preferences")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.sendMode === "enter" || data.sendMode === "cmd_enter") {
+          setSendMode(data.sendMode);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Auto-resize textarea
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 150) + "px";
+    }
+  }, []);
+
+  // Handle textarea change (for auto-grow)
+  const handleTextareaChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
+      handleInputChange(e);
+      resizeTextarea();
+    },
+    [handleInputChange, resizeTextarea]
+  );
 
   // Load sessions for current diagram
   const loadSessions = useCallback(async () => {
@@ -340,22 +372,46 @@ export function ChatPanel() {
         onSubmit={handleSubmit}
         className="p-3 border-t border-[var(--border)] shrink-0"
       >
-        <div className="flex gap-2">
-          <input
+        <div className="flex gap-2 items-end">
+          <textarea
+            ref={textareaRef}
             value={input}
-            onChange={handleInputChange}
+            onChange={handleTextareaChange}
+            onKeyDown={(e) => {
+              if (sendMode === "cmd_enter") {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              } else {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }
+            }}
             placeholder="Describe your diagram..."
             disabled={isLoading}
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50"
+            rows={1}
+            className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50 resize-none overflow-y-auto"
+            style={{ maxHeight: "150px" }}
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+            title={sendMode === "cmd_enter" ? "Send (Cmd+Enter)" : "Send (Enter)"}
+            className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>
         </div>
+        <p className="text-[10px] text-[var(--muted-foreground)] mt-1">
+          {sendMode === "cmd_enter"
+            ? typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent)
+              ? "Cmd+Enter to send, Enter for new line"
+              : "Ctrl+Enter to send, Enter for new line"
+            : "Enter to send, Shift+Enter for new line"}
+        </p>
       </form>
     </div>
   );
