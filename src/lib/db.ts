@@ -197,6 +197,15 @@ export async function initializeDatabase(): Promise<void> {
       END IF;
     END $$;
   `);
+
+  // User preferences (per-user settings like keyboard shortcuts)
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      preferences JSONB NOT NULL DEFAULT '{}',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }
 
 // --- Users ---
@@ -715,6 +724,34 @@ export async function touchApiKeyLastUsed(id: string) {
 
 // --- User Preferences ---
 
+export interface UserPreferencesRow {
+  user_id: string;
+  preferences: Record<string, unknown>;
+  updated_at: string;
+}
+
+export async function getUserPreferences(userId: string): Promise<Record<string, unknown>> {
+  const row = await queryOne<UserPreferencesRow>(
+    "SELECT preferences FROM user_preferences WHERE user_id = $1",
+    [userId]
+  );
+  return (row?.preferences as Record<string, unknown>) ?? {};
+}
+
+export async function setUserPreferences(
+  userId: string,
+  preferences: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  await query(
+    `INSERT INTO user_preferences (user_id, preferences, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id)
+     DO UPDATE SET preferences = user_preferences.preferences || $2, updated_at = NOW()`,
+    [userId, JSON.stringify(preferences)]
+  );
+  return getUserPreferences(userId);
+}
+
 export interface UserPreferenceRow {
   user_id: string;
   send_mode: string;
@@ -742,5 +779,6 @@ export async function setUserPreference(
     );
   }
 }
+
 
 export default getPool;
