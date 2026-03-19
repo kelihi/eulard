@@ -404,6 +404,7 @@ export function VisualCanvas() {
         selectionKeyCode={null}
         multiSelectionKeyCode="Shift"
         panOnDrag={[1]}
+        panOnScroll
         proOptions={{ hideAttribution: true }}
       >
         <Background />

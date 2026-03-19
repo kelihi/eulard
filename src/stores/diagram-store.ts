@@ -231,6 +231,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
       redoStack: [],
       canUndo: false,
       canRedo: false,
+      selectedNodeIds: [],
+      selectedEdgeIds: [],
     });
   },
 
