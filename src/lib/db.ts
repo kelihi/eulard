@@ -164,6 +164,14 @@ export async function initializeDatabase(): Promise<void> {
   await query("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)");
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      send_mode TEXT NOT NULL DEFAULT 'cmd_enter' CHECK (send_mode IN ('cmd_enter', 'enter')),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // Migration: add style_overrides column to existing diagrams tables
   await query(`
     DO $$
@@ -743,5 +751,34 @@ export async function setUserPreferences(
   );
   return getUserPreferences(userId);
 }
+
+export interface UserPreferenceRow {
+  user_id: string;
+  send_mode: string;
+  updated_at: string;
+}
+
+export async function getUserPreference(userId: string): Promise<UserPreferenceRow | null> {
+  return queryOne<UserPreferenceRow>(
+    "SELECT user_id, send_mode, updated_at FROM user_preferences WHERE user_id = $1",
+    [userId]
+  );
+}
+
+export async function setUserPreference(
+  userId: string,
+  data: { sendMode?: string }
+): Promise<void> {
+  if (data.sendMode !== undefined) {
+    await query(
+      `INSERT INTO user_preferences (user_id, send_mode, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id)
+       DO UPDATE SET send_mode = $2, updated_at = NOW()`,
+      [userId, data.sendMode]
+    );
+  }
+}
+
 
 export default getPool;

@@ -17,6 +17,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [keyPreview, setKeyPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [sendMode, setSendMode] = useState<"cmd_enter" | "enter">("cmd_enter");
+  const [savingSendMode, setSavingSendMode] = useState(false);
 
   // Sidebar shortcut state
   const [sidebarShortcut, setSidebarShortcut] = useState(DEFAULT_SIDEBAR_SHORTCUT);
@@ -44,6 +46,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           }
         })
         .catch(() => {});
+      fetch("/api/preferences")
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.sendMode === "enter" || data.sendMode === "cmd_enter") {
+            setSendMode(data.sendMode);
+          }
+        });
       setApiKey("");
       setMessage(null);
       setShortcutMessage(null);
@@ -129,6 +138,22 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       setMessage("Failed to save API key.");
     }
     setSaving(false);
+  };
+
+  const handleSendModeChange = async (mode: "cmd_enter" | "enter") => {
+    setSendMode(mode);
+    setSavingSendMode(true);
+    try {
+      await fetch("/api/preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sendMode: mode }),
+      });
+    } catch {
+      // Revert on failure
+      setSendMode(mode === "cmd_enter" ? "enter" : "cmd_enter");
+    }
+    setSavingSendMode(false);
   };
 
   const handleClear = async () => {
@@ -263,6 +288,65 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 >
                   {saving ? "..." : "Save"}
                 </button>
+              </div>
+            </div>
+
+            {/* Send Mode Preference */}
+            <div className="pt-4 border-t border-[var(--border)]">
+              <label className="flex items-center gap-2 text-sm font-medium mb-2">
+                <Keyboard className="w-3.5 h-3.5" />
+                Chat Send Shortcut
+              </label>
+              <p className="text-xs text-[var(--muted-foreground)] mb-3">
+                Choose how to send messages in the AI chat.
+              </p>
+              <div className="flex flex-col gap-2">
+                <label
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                    sendMode === "cmd_enter"
+                      ? "border-[var(--primary)] bg-[var(--primary)]/10"
+                      : "border-[var(--border)] hover:bg-[var(--muted)]"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="sendMode"
+                    value="cmd_enter"
+                    checked={sendMode === "cmd_enter"}
+                    onChange={() => handleSendModeChange("cmd_enter")}
+                    disabled={savingSendMode}
+                    className="accent-[var(--primary)]"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">Cmd+Enter to send</span>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      Enter inserts a new line
+                    </p>
+                  </div>
+                </label>
+                <label
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                    sendMode === "enter"
+                      ? "border-[var(--primary)] bg-[var(--primary)]/10"
+                      : "border-[var(--border)] hover:bg-[var(--muted)]"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="sendMode"
+                    value="enter"
+                    checked={sendMode === "enter"}
+                    onChange={() => handleSendModeChange("enter")}
+                    disabled={savingSendMode}
+                    className="accent-[var(--primary)]"
+                  />
+                  <div>
+                    <span className="text-sm font-medium">Enter to send</span>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      Shift+Enter inserts a new line
+                    </p>
+                  </div>
+                </label>
               </div>
             </div>
 
