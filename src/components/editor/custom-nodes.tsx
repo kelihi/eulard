@@ -130,7 +130,7 @@ function DefaultNode({ data, selected }: NodeProps) {
       className={`px-4 py-2 rounded border-2 bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center ${
         selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
       }`}
-      style={nodeStyles}
+      style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
@@ -185,7 +185,7 @@ function StadiumNode({ data, selected }: NodeProps) {
       className={`px-4 py-2 rounded-full border-2 bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center ${
         selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
       }`}
-      style={nodeStyles}
+      style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
@@ -203,7 +203,7 @@ function SubroutineNode({ data, selected }: NodeProps) {
       className={`px-4 py-2 border-double border-4 bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center ${
         selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
       }`}
-      style={nodeStyles}
+      style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
@@ -223,7 +223,7 @@ function CylinderNode({ data, selected }: NodeProps) {
         className={`px-4 py-3 border-2 bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%] whitespace-normal break-words w-full h-full flex items-center justify-center ${
           selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
         }`}
-        style={nodeStyles}
+        style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
       >
         <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       </div>
@@ -241,7 +241,7 @@ function CircleNode({ data, selected }: NodeProps) {
       className={`rounded-full border-2 bg-[var(--background)] text-sm font-medium shadow-sm flex items-center justify-center text-center whitespace-normal break-words p-2 w-full h-full ${
         selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
       }`}
-      style={nodeStyles}
+      style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
