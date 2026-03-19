@@ -1,0 +1,10 @@
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: eulard-cert
+  namespace: eulard
+  labels:
+    app.kubernetes.io/part-of: eulard
+spec:
+  domains:
+    - eulard.kelihi.com

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdminFromRequest } from "@/lib/auth";
 import { getSetting, setSetting, deleteSetting } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { getDefaultSystemPrompt } from "@/lib/ai/system-prompt";
@@ -11,9 +11,9 @@ const AI_SETTING_KEYS = {
   MODEL: "ai_model",
 } as const;
 
-export async function GET() {
+export async function GET(request: Request) {
   const log = logger.apiRequest("GET", "/api/admin/ai-settings");
-  const admin = await requireAdmin();
+  const admin = await requireAdminFromRequest(request);
   if (!admin) {
     log.done(403, "forbidden");
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -40,7 +40,7 @@ const updateSchema = z.object({
 
 export async function PUT(request: Request) {
   const log = logger.apiRequest("PUT", "/api/admin/ai-settings");
-  const admin = await requireAdmin();
+  const admin = await requireAdminFromRequest(request);
   if (!admin) {
     log.done(403, "forbidden");
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

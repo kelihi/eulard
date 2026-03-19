@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listChatSessions, createChatSession, canAccessDiagram } from "@/lib/db";
-import { getRequiredUser } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import { z } from "zod";
@@ -8,7 +8,7 @@ import { z } from "zod";
 export async function GET(request: Request) {
   const log = logger.apiRequest("GET", "/api/chat-sessions");
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "diagramId is required" }, { status: 400 });
     }
 
-    const access = await canAccessDiagram(diagramId, user.id);
+    const access = await canAccessDiagram(diagramId, user.id, user.email);
     if (!access.access) {
       log.done(403, "forbidden");
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -44,7 +44,7 @@ const createSchema = z.object({
 export async function POST(request: Request) {
   const log = logger.apiRequest("POST", "/api/chat-sessions");
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: parsed.error.message }, { status: 400 });
     }
 
-    const access = await canAccessDiagram(parsed.data.diagramId, user.id);
+    const access = await canAccessDiagram(parsed.data.diagramId, user.id, user.email);
     if (!access.access) {
       log.done(403, "forbidden");
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

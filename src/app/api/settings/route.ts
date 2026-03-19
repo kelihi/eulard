@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getRequiredUser } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
-export async function GET() {
+export async function GET(request: Request) {
   const log = logger.apiRequest("GET", "/api/settings");
-  const user = await getRequiredUser();
+  const user = await authenticateRequest(request);
   if (!user) {
     log.done(401, "unauthorized");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -19,9 +19,9 @@ export async function GET() {
   });
 }
 
-export async function PUT() {
+export async function PUT(request: Request) {
   const log = logger.apiRequest("PUT", "/api/settings");
-  const user = await getRequiredUser();
+  const user = await authenticateRequest(request);
   if (!user) {
     log.done(401, "unauthorized");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

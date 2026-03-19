@@ -13,7 +13,7 @@ import {
   exportDiagramSchema,
 } from "@/lib/ai/tools";
 import { NextResponse } from "next/server";
-import { getRequiredUser } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
 import { getSetting } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { generateId } from "@/lib/utils";
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const log = logger.apiRequest("POST", "/api/ai/chat", { requestId });
   const start = Date.now();
 
-  const user = await getRequiredUser();
+  const user = await authenticateRequest(request);
   if (!user) {
     log.done(401, "unauthorized");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { messages, currentCode, sessionId, diagramId } = await request.json();
+  const { messages, currentCode, sessionId, diagramId, selectedNodeIds, selectedEdgeIds } = await request.json();
 
   // Resolve or create chat session
   let resolvedSessionId: string | null = sessionId ?? null;
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   }
 
   if (!resolvedSessionId && diagramId) {
-    const access = await canAccessDiagram(diagramId, user.id);
+    const access = await canAccessDiagram(diagramId, user.id, user.email);
     if (access.access) {
       resolvedSessionId = generateId();
       await createChatSession(resolvedSessionId, diagramId, user.id);
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
 
   const result = streamText({
     model: anthropic(modelId),
-    system: buildSystemPrompt(currentCode || "", customPrompt),
+    system: buildSystemPrompt(currentCode || "", customPrompt, selectedNodeIds, selectedEdgeIds),
     messages,
     tools: {
       addNodes: tool({

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listDiagrams, createDiagram } from "@/lib/db";
-import { getRequiredUser } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 
@@ -9,13 +9,13 @@ export async function GET(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("GET", "/api/diagrams", { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const diagrams = await listDiagrams(user.id);
+    const diagrams = await listDiagrams(user.id, user.email);
     log.done(200, `listed ${diagrams.length} diagrams`, { userId: user.id });
     return NextResponse.json(diagrams);
   } catch (err) {
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("POST", "/api/diagrams", { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

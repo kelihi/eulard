@@ -5,6 +5,7 @@ export interface DiagramState {
   positions: string | null;
   styleOverrides: string | null;
   folderId: string | null;
+  permission: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,4 +23,7 @@ export interface DiagramListItem {
 export interface Folder {
   id: string;
   name: string;
+  isShared?: boolean;
+  permission?: string;
+  ownerEmail?: string;
 }

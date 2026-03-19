@@ -26,7 +26,7 @@ async function getMermaid() {
     mermaidInstance = await import("mermaid");
     mermaidInstance.default.initialize({
       startOnLoad: false,
-      securityLevel: "loose",
+      securityLevel: "strict",
       theme: "default",
       flowchart: {
         htmlLabels: true,
@@ -297,7 +297,7 @@ export function MermaidPreview() {
         const DOMPurify = (await import("dompurify")).default;
         const clean = DOMPurify.sanitize(svg, {
           USE_PROFILES: { svg: true, svgFilters: true, html: true },
-          ADD_TAGS: ["foreignObject", "style"],
+          ADD_TAGS: ["foreignObject"],
           HTML_INTEGRATION_POINTS: { foreignobject: true },
           FORBID_TAGS: ["script", "iframe"],
           FORBID_ATTR: [
