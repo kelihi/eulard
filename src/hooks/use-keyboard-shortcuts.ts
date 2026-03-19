@@ -7,45 +7,8 @@ interface KeyboardShortcutsOptions {
   onToggleSidebar?: () => void;
 }
 
-export interface ShortcutBinding {
-  key: string;
-  metaKey?: boolean;
-  ctrlKey?: boolean;
-  shiftKey?: boolean;
-  altKey?: boolean;
-}
-
 /** Default sidebar toggle shortcut: Cmd+B (Mac) / Ctrl+B (Windows/Linux) */
 const DEFAULT_SIDEBAR_SHORTCUT = "mod+b";
-
-/**
- * Parse a shortcut string like "mod+b", "mod+shift+\\", "ctrl+b" into a ShortcutBinding.
- * "mod" means metaKey on Mac, ctrlKey elsewhere.
- */
-export function parseShortcut(shortcut: string): ShortcutBinding {
-  const parts = shortcut.toLowerCase().split("+");
-  const binding: ShortcutBinding = { key: parts[parts.length - 1] };
-  for (const part of parts.slice(0, -1)) {
-    if (part === "mod") {
-      // Will be resolved at match time
-    } else if (part === "ctrl") {
-      binding.ctrlKey = true;
-    } else if (part === "meta" || part === "cmd") {
-      binding.metaKey = true;
-    } else if (part === "shift") {
-      binding.shiftKey = true;
-    } else if (part === "alt") {
-      binding.altKey = true;
-    }
-  }
-  // If "mod" is in parts, we handle it specially during matching
-  if (parts.includes("mod")) {
-    // Mark both as potential — resolved at match time
-    binding.ctrlKey = undefined;
-    binding.metaKey = undefined;
-  }
-  return binding;
-}
 
 /**
  * Check if a keyboard event matches a shortcut string.

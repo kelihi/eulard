@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { X, Key, Check, Trash2, Keyboard } from "lucide-react";
 import { formatShortcut } from "@/hooks/use-keyboard-shortcuts";
 
@@ -23,7 +23,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [shortcutSaving, setShortcutSaving] = useState(false);
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
-  const recordingRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -183,7 +182,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                   <span className="text-sm">Toggle Sidebar</span>
                   <div className="flex items-center gap-2">
                     <button
-                      ref={recordingRef}
                       onClick={() => setIsRecording(!isRecording)}
                       className={`px-2 py-1 text-xs font-mono rounded border transition-colors ${
                         isRecording
