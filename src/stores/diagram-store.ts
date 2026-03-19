@@ -8,6 +8,7 @@ interface DiagramStore {
   diagram: DiagramState | null;
   diagrams: DiagramListItem[];
   folders: Folder[];
+  sharedFolders: Folder[];
   isDirty: boolean;
   syncState: "idle" | "ai-streaming" | "saving";
   error: string | null;
@@ -50,6 +51,7 @@ interface DiagramStore {
   moveDiagram: (diagramId: string, folderId: string | null) => Promise<void>;
 
   loadFolders: () => Promise<void>;
+  loadSharedFolders: () => Promise<void>;
   createFolder: (name?: string) => Promise<string>;
   renameFolder: (id: string, name: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
@@ -69,6 +71,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   diagram: null,
   diagrams: [],
   folders: [],
+  sharedFolders: [],
   isDirty: false,
   syncState: "idle",
   error: null,
@@ -304,8 +307,15 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   loadFolders: async () => {
     const res = await fetch("/api/folders");
     if (!res.ok) return;
-    const folders = await res.json();
-    set({ folders });
+    const data = await res.json();
+    set({ folders: data.owned || [], sharedFolders: data.shared || [] });
+  },
+
+  loadSharedFolders: async () => {
+    const res = await fetch("/api/folders");
+    if (!res.ok) return;
+    const data = await res.json();
+    set({ folders: data.owned || [], sharedFolders: data.shared || [] });
   },
 
   createFolder: async (name?: string) => {
