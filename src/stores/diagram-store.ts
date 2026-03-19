@@ -8,6 +8,7 @@ interface DiagramStore {
   diagram: DiagramState | null;
   diagrams: DiagramListItem[];
   folders: Folder[];
+  sharedFolders: Folder[];
   isDirty: boolean;
   syncState: "idle" | "ai-streaming" | "saving";
   error: string | null;
@@ -22,6 +23,13 @@ interface DiagramStore {
   _batchStartCode: string | undefined;
   beginBatch: () => void;
   endBatch: () => void;
+
+  // Multi-selection state
+  selectedNodeIds: string[];
+  selectedEdgeIds: string[];
+  setSelectedNodeIds: (ids: string[]) => void;
+  setSelectedEdgeIds: (ids: string[]) => void;
+  clearSelection: () => void;
 
   setCode: (code: string) => void;
   setTitle: (title: string) => void;
@@ -43,9 +51,11 @@ interface DiagramStore {
   moveDiagram: (diagramId: string, folderId: string | null) => Promise<void>;
 
   loadFolders: () => Promise<void>;
+  loadSharedFolders: () => Promise<void>;
   createFolder: (name?: string) => Promise<string>;
   renameFolder: (id: string, name: string) => Promise<void>;
   deleteFolder: (id: string) => Promise<void>;
+  setFolderClient: (id: string, clientId: string | null) => Promise<void>;
 }
 
 let saveTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -62,6 +72,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   diagram: null,
   diagrams: [],
   folders: [],
+  sharedFolders: [],
   isDirty: false,
   syncState: "idle",
   error: null,
@@ -70,6 +81,13 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   canUndo: false,
   canRedo: false,
   _batchStartCode: undefined,
+
+  // Multi-selection state
+  selectedNodeIds: [],
+  selectedEdgeIds: [],
+  setSelectedNodeIds: (ids: string[]) => set({ selectedNodeIds: ids }),
+  setSelectedEdgeIds: (ids: string[]) => set({ selectedEdgeIds: ids }),
+  clearSelection: () => set({ selectedNodeIds: [], selectedEdgeIds: [] }),
 
   beginBatch: () => {
     const { diagram } = get();
@@ -217,6 +235,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
       redoStack: [],
       canUndo: false,
       canRedo: false,
+      selectedNodeIds: [],
+      selectedEdgeIds: [],
     });
   },
 
@@ -288,8 +308,15 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   loadFolders: async () => {
     const res = await fetch("/api/folders");
     if (!res.ok) return;
-    const folders = await res.json();
-    set({ folders });
+    const data = await res.json();
+    set({ folders: data.owned || [], sharedFolders: data.shared || [] });
+  },
+
+  loadSharedFolders: async () => {
+    const res = await fetch("/api/folders");
+    if (!res.ok) return;
+    const data = await res.json();
+    set({ folders: data.owned || [], sharedFolders: data.shared || [] });
   },
 
   createFolder: async (name?: string) => {
@@ -308,6 +335,15 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, name }),
+    });
+    get().loadFolders();
+  },
+
+  setFolderClient: async (id: string, clientId: string | null) => {
+    await fetch("/api/folders", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, clientId }),
     });
     get().loadFolders();
   },

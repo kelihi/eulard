@@ -121,14 +121,16 @@ function useNodeStyles(nodeId: string | null): React.CSSProperties {
   }, [styleOverridesJson, nodeId]);
 }
 
-function DefaultNode({ data }: NodeProps) {
+function DefaultNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
   return (
     <div
-      className="px-4 py-2 rounded border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center"
-      style={nodeStyles}
+      className={`px-4 py-2 rounded border-2 bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center ${
+        selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+      }`}
+      style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
@@ -137,7 +139,7 @@ function DefaultNode({ data }: NodeProps) {
   );
 }
 
-function DecisionNode({ data }: NodeProps) {
+function DecisionNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
@@ -148,10 +150,20 @@ function DecisionNode({ data }: NodeProps) {
         <polygon
           points="50,2 98,50 50,98 2,50"
           fill={nodeStyles.backgroundColor ?? "var(--background)"}
-          stroke={nodeStyles.borderColor ?? "var(--border)"}
-          strokeWidth="2"
+          stroke={selected ? "var(--primary)" : (nodeStyles.borderColor ?? "var(--border)")}
+          strokeWidth={selected ? "3" : "2"}
           vectorEffect="non-scaling-stroke"
         />
+        {selected && (
+          <polygon
+            points="50,2 98,50 50,98 2,50"
+            fill="none"
+            stroke="var(--primary)"
+            strokeWidth="6"
+            strokeOpacity="0.3"
+            vectorEffect="non-scaling-stroke"
+          />
+        )}
       </svg>
       <span
         className="relative z-10 text-sm font-medium text-center px-4 whitespace-normal break-words overflow-hidden"
@@ -164,14 +176,16 @@ function DecisionNode({ data }: NodeProps) {
   );
 }
 
-function StadiumNode({ data }: NodeProps) {
+function StadiumNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
   return (
     <div
-      className="px-4 py-2 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center"
-      style={nodeStyles}
+      className={`px-4 py-2 rounded-full border-2 bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center ${
+        selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+      }`}
+      style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
@@ -180,14 +194,16 @@ function StadiumNode({ data }: NodeProps) {
   );
 }
 
-function SubroutineNode({ data }: NodeProps) {
+function SubroutineNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
   return (
     <div
-      className="px-4 py-2 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center border-double border-4 whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center"
-      style={nodeStyles}
+      className={`px-4 py-2 border-double border-4 bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center ${
+        selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+      }`}
+      style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
@@ -196,7 +212,7 @@ function SubroutineNode({ data }: NodeProps) {
   );
 }
 
-function CylinderNode({ data }: NodeProps) {
+function CylinderNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
@@ -204,8 +220,10 @@ function CylinderNode({ data }: NodeProps) {
     <div className="relative flex items-center justify-center w-full h-full">
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <div
-        className="px-4 py-3 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%] whitespace-normal break-words w-full h-full flex items-center justify-center"
-        style={nodeStyles}
+        className={`px-4 py-3 border-2 bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%] whitespace-normal break-words w-full h-full flex items-center justify-center ${
+          selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+        }`}
+        style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
       >
         <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       </div>
@@ -214,14 +232,16 @@ function CylinderNode({ data }: NodeProps) {
   );
 }
 
-function CircleNode({ data }: NodeProps) {
+function CircleNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
   return (
     <div
-      className="rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm flex items-center justify-center text-center whitespace-normal break-words p-2 w-full h-full"
-      style={nodeStyles}
+      className={`rounded-full border-2 bg-[var(--background)] text-sm font-medium shadow-sm flex items-center justify-center text-center whitespace-normal break-words p-2 w-full h-full ${
+        selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+      }`}
+      style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
       <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
