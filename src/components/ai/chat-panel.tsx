@@ -111,7 +111,7 @@ export function ChatPanel() {
     [handleInputChange, resizeTextarea]
   );
 
-  // Load sessions for current diagram
+  // Load sessions for current diagram (imperative, for refreshes after chat/delete)
   const loadSessions = useCallback(async () => {
     if (!diagramId) return;
     try {
@@ -125,9 +125,24 @@ export function ChatPanel() {
     }
   }, [diagramId]);
 
+  // Effect-based load with stale-fetch guard to prevent race conditions
+  // when switching diagrams quickly
   useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
+    let cancelled = false;
+    (async () => {
+      if (!diagramId) return;
+      try {
+        const res = await fetch(`/api/chat-sessions?diagramId=${diagramId}`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setSessions(data);
+        }
+      } catch {
+        // Silently fail
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [diagramId]);
 
   // Close session list when clicking outside
   useEffect(() => {
