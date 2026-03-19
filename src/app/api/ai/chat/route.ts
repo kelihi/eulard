@@ -121,7 +121,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { messages, currentCode, folderId, sessionId, diagramId, selectedNodeIds, selectedEdgeIds, maxSteps: clientMaxSteps, model: clientModel } = await request.json();
+  const { messages, currentCode, folderId, sessionId, diagramId, selectedNodeIds, selectedEdgeIds, maxSteps: clientMaxSteps, model: clientModel, userContext } = await request.json();
 
   // If the diagram is in a folder with a bound client, pre-fetch context
   let folderClientContext: string | null = null;
@@ -304,7 +304,7 @@ export async function POST(request: Request) {
 
   const result = streamText({
     model: anthropic(modelId),
-    system: buildSystemPrompt(currentCode || "", customPrompt, folderClientContext, selectedNodeIds, selectedEdgeIds),
+    system: buildSystemPrompt(currentCode || "", customPrompt, folderClientContext, selectedNodeIds, selectedEdgeIds, userContext),
     messages,
     tools: allTools,
     maxSteps,

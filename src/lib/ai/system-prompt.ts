@@ -97,7 +97,7 @@ ${clientContextSection}
 /**
  * Build the final system prompt by injecting the current diagram context.
  * If a custom prompt template is provided (from admin settings), use that instead of the default.
- * Optionally appends pre-loaded folder client context.
+ * Optionally appends pre-loaded folder client context and user-provided context.
  */
 export function buildSystemPrompt(
   currentCode: string,
@@ -105,6 +105,7 @@ export function buildSystemPrompt(
   folderClientContext?: string | null,
   selectedNodeIds?: string[] | null,
   selectedEdgeIds?: string[] | null,
+  userContext?: string | null,
 ): string {
   const graph = mermaidToGraph(currentCode);
 
@@ -148,6 +149,15 @@ This folder is bound to a specific client. The client's data has been pre-loaded
 ${folderClientContext}
 
 Use this client context automatically when building or modifying diagrams. You do not need to call getClientContext for this client — the data is already available above. You may still use listClients/getClientContext to look up other clients if needed.`;
+  }
+
+  if (userContext && userContext.trim()) {
+    prompt += `
+
+## User-Provided Context
+The user has provided the following context, requirements, or reference material. Use this information to inform your diagram creation and modifications:
+
+${userContext.trim()}`;
   }
 
   return prompt;
