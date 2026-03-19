@@ -5,7 +5,7 @@ import {
   deleteChatSession,
   updateChatSessionTitle,
 } from "@/lib/db";
-import { getRequiredUser } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
 export async function GET(
@@ -15,7 +15,7 @@ export async function GET(
   const { sessionId } = await params;
   const log = logger.apiRequest("GET", `/api/chat-sessions/${sessionId}`);
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(_request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -48,7 +48,7 @@ export async function PUT(
   const { sessionId } = await params;
   const log = logger.apiRequest("PUT", `/api/chat-sessions/${sessionId}`);
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -86,7 +86,7 @@ export async function DELETE(
   const { sessionId } = await params;
   const log = logger.apiRequest("DELETE", `/api/chat-sessions/${sessionId}`);
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(_request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

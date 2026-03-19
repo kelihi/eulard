@@ -15,7 +15,7 @@ import {
   getClientContextSchema,
 } from "@/lib/ai/tools";
 import { NextResponse } from "next/server";
-import { getRequiredUser } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
 import {
   getSetting,
   getFolder,
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
   const log = logger.apiRequest("POST", "/api/ai/chat", { requestId });
   const start = Date.now();
 
-  const user = await getRequiredUser();
+  const user = await authenticateRequest(request);
   if (!user) {
     log.done(401, "unauthorized");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { messages, currentCode, folderId, sessionId, diagramId } = await request.json();
+  const { messages, currentCode, folderId, sessionId, diagramId, selectedNodeIds, selectedEdgeIds } = await request.json();
 
   // If the diagram is in a folder with a bound client, pre-fetch context
   let folderClientContext: string | null = null;
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
   }
 
   if (!resolvedSessionId && diagramId) {
-    const access = await canAccessDiagram(diagramId, user.id);
+    const access = await canAccessDiagram(diagramId, user.id, user.email);
     if (access.access) {
       resolvedSessionId = generateId();
       await createChatSession(resolvedSessionId, diagramId, user.id);
@@ -297,7 +297,7 @@ export async function POST(request: Request) {
 
   const result = streamText({
     model: anthropic(modelId),
-    system: buildSystemPrompt(currentCode || "", customPrompt, folderClientContext),
+    system: buildSystemPrompt(currentCode || "", customPrompt, folderClientContext, selectedNodeIds, selectedEdgeIds),
     messages,
     tools: allTools,
     maxSteps: 15,

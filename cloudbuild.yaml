@@ -1,4 +1,11 @@
 steps:
+  - name: 'node:20-alpine'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - 'corepack enable && pnpm install --frozen-lockfile && pnpm run build'
+    id: 'validate'
+
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -7,6 +14,11 @@ steps:
       - '-t'
       - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:latest'
       - '.'
+    id: 'build'
+
 images:
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:$SHORT_SHA'
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

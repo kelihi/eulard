@@ -99,7 +99,13 @@ ${clientContextSection}
  * If a custom prompt template is provided (from admin settings), use that instead of the default.
  * Optionally appends pre-loaded folder client context.
  */
-export function buildSystemPrompt(currentCode: string, customPromptTemplate?: string | null, folderClientContext?: string | null): string {
+export function buildSystemPrompt(
+  currentCode: string,
+  customPromptTemplate?: string | null,
+  folderClientContext?: string | null,
+  selectedNodeIds?: string[] | null,
+  selectedEdgeIds?: string[] | null,
+): string {
   const graph = mermaidToGraph(currentCode);
 
   let graphContext = "";
@@ -112,11 +118,26 @@ Edges: ${graph.edges.map((e) => `${e.source}→${e.target}${e.label ? `[${e.labe
 `;
   }
 
+  let selectionContext = "";
+  const hasSelectedNodes = selectedNodeIds && selectedNodeIds.length > 0;
+  const hasSelectedEdges = selectedEdgeIds && selectedEdgeIds.length > 0;
+  if (hasSelectedNodes || hasSelectedEdges) {
+    selectionContext = "\n## Active Selection\n";
+    selectionContext += "The user has selected specific elements on the canvas. You MUST only modify the selected elements listed below. Do NOT add, remove, or modify any other nodes or edges that are not in the selection.\n";
+    if (hasSelectedNodes) {
+      selectionContext += `Selected nodes: ${selectedNodeIds.join(", ")}\n`;
+    }
+    if (hasSelectedEdges) {
+      selectionContext += `Selected edges: ${selectedEdgeIds.join(", ")}\n`;
+    }
+    selectionContext += "\nWhen the user asks to make changes, apply them ONLY to these selected elements. If the user's request would require modifying unselected elements, explain that those elements are not selected and ask the user to select them first or clear the selection.\n";
+  }
+
   const template = customPromptTemplate || getDefaultSystemPrompt();
 
   let prompt = template
     .replace("{{CURRENT_CODE}}", () => currentCode)
-    .replace("{{GRAPH_CONTEXT}}", () => graphContext);
+    .replace("{{GRAPH_CONTEXT}}", () => graphContext + selectionContext);
 
   if (folderClientContext) {
     prompt += `

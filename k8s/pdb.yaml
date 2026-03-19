@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: eulard-web-pdb
+  namespace: eulard
+  labels:
+    app.kubernetes.io/part-of: eulard
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: eulard-web

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   getBezierPath,
   EdgeLabelRenderer,
   BaseEdge,
   type EdgeProps,
 } from "@xyflow/react";
+import { useDiagramStore } from "@/stores/diagram-store";
+import type { EdgeStyleOverride, DiagramStyles } from "@/types/graph";
 
 export interface CustomEdgeData {
   edgeLabel?: string;
@@ -14,6 +16,29 @@ export interface CustomEdgeData {
   mermaidEdgeType: string;
   onRenameEdge?: (edgeId: string, newLabel: string) => void;
   [key: string]: unknown;
+}
+
+function useEdgeStyles(edgeId: string): { pathStyle: React.CSSProperties; labelStyle: React.CSSProperties } {
+  const styleOverridesJson = useDiagramStore((s) => s.diagram?.styleOverrides ?? null);
+  return useMemo(() => {
+    if (!styleOverridesJson) return { pathStyle: {}, labelStyle: {} };
+    try {
+      const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
+      const globalEdge = styles.globalEdge ?? {};
+      const edgeOverride = styles.edges?.[edgeId] ?? {};
+      const merged: EdgeStyleOverride = { ...globalEdge, ...edgeOverride };
+      const pathStyle: React.CSSProperties = {};
+      const labelStyle: React.CSSProperties = {};
+      if (merged.lineColor) pathStyle.stroke = merged.lineColor;
+      if (merged.lineThickness) pathStyle.strokeWidth = merged.lineThickness;
+      if (merged.fontFamily) labelStyle.fontFamily = merged.fontFamily;
+      if (merged.fontSize) labelStyle.fontSize = `${merged.fontSize}px`;
+      if (merged.fontColor) labelStyle.color = merged.fontColor;
+      return { pathStyle, labelStyle };
+    } catch {
+      return { pathStyle: {}, labelStyle: {} };
+    }
+  }, [styleOverridesJson, edgeId]);
 }
 
 function EditableEdge({
@@ -27,10 +52,12 @@ function EditableEdge({
   data,
   style,
   markerEnd,
+  selected,
 }: EdgeProps) {
   const edgeData = data as unknown as CustomEdgeData;
   const label = edgeData?.edgeLabel ?? "";
   const onRenameEdge = edgeData?.onRenameEdge;
+  const { pathStyle, labelStyle } = useEdgeStyles(edgeData?.edgeId ?? id);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(label);
@@ -92,7 +119,11 @@ function EditableEdge({
       <BaseEdge
         id={id}
         path={edgePath}
-        style={style}
+        style={{
+          ...style,
+          ...pathStyle,
+          ...(selected ? { stroke: "var(--primary)", strokeWidth: 3 } : {}),
+        }}
         markerEnd={markerEnd}
       />
       <EdgeLabelRenderer>
@@ -118,7 +149,7 @@ function EditableEdge({
             <div
               onDoubleClick={handleDoubleClick}
               className="cursor-pointer rounded bg-[var(--background)] px-2 py-0.5 text-xs text-[var(--foreground)] border border-[var(--border)] shadow-sm hover:border-[var(--primary)] transition-colors"
-              style={{ fontSize: "11px" }}
+              style={{ fontSize: "11px", ...labelStyle }}
             >
               {label}
             </div>

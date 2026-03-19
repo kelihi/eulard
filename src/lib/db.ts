@@ -12,21 +12,28 @@ function getPool(): pg.Pool {
       _pool = new Pool({
         host: `/cloudsql/${instanceConnectionName}`,
         database: process.env.DB_NAME || "eulard",
-        user: process.env.DB_USER || "eulard_user",
+        user: process.env.DB_USER || "eulard-app",
         password: process.env.DB_PASSWORD || "",
         max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
       });
     } else {
       _pool = new Pool({
         host: process.env.DB_HOST || "127.0.0.1",
         port: parseInt(process.env.DB_PORT || "5432", 10),
         database: process.env.DB_NAME || "eulard",
-        user: process.env.DB_USER || "eulard_user",
+        user: process.env.DB_USER || "eulard-app",
         password: process.env.DB_PASSWORD || "",
         ssl: process.env.DB_SSL === "true" ? { rejectUnauthorized: false } : undefined,
         max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
       });
     }
+    _pool.on('error', (err) => {
+      console.error('Unexpected database pool error:', err);
+    });
   }
   return _pool;
 }
@@ -83,6 +90,7 @@ export async function initializeDatabase(): Promise<void> {
       title TEXT NOT NULL DEFAULT 'Untitled Diagram',
       code TEXT NOT NULL DEFAULT 'flowchart TB\n    A[Start] --> B[End]',
       positions TEXT,
+      style_overrides TEXT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -137,12 +145,84 @@ export async function initializeDatabase(): Promise<void> {
   await query("CREATE INDEX IF NOT EXISTS idx_folders_user_id ON folders(user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_diagram_shares_diagram ON diagram_shares(diagram_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_diagram_shares_user ON diagram_shares(shared_with_user_id)");
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS folder_shares (
+      id TEXT PRIMARY KEY,
+      folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+      shared_with_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      permission TEXT NOT NULL DEFAULT 'view' CHECK (permission IN ('view')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(folder_id, shared_with_user_id)
+    )
+  `);
+  await query("CREATE INDEX IF NOT EXISTS idx_folder_shares_folder ON folder_shares(folder_id)");
+  await query("CREATE INDEX IF NOT EXISTS idx_folder_shares_user ON folder_shares(shared_with_user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
   await query("CREATE INDEX IF NOT EXISTS idx_chat_sessions_diagram ON chat_sessions(diagram_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC)");
   await query("CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages(session_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_chat_messages_created ON chat_messages(session_id, created_at ASC)");
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL DEFAULT 'Unnamed Key',
+      key_hash TEXT NOT NULL,
+      key_prefix TEXT NOT NULL,
+      last_used_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ,
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query("CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)");
+  await query("CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)");
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      send_mode TEXT NOT NULL DEFAULT 'cmd_enter' CHECK (send_mode IN ('cmd_enter', 'enter')),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  // Migration: add style_overrides column to existing diagrams tables
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'diagrams' AND column_name = 'style_overrides'
+      ) THEN
+        ALTER TABLE diagrams ADD COLUMN style_overrides TEXT;
+      END IF;
+    END $$;
+  `);
+
+  // Migration: add org_shared column for organization-wide sharing
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'diagrams' AND column_name = 'org_shared'
+      ) THEN
+        ALTER TABLE diagrams ADD COLUMN org_shared TEXT CHECK (org_shared IN ('view', 'edit'));
+      END IF;
+    END $$;
+  `);
+
+  // User preferences (per-user settings like keyboard shortcuts)
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      preferences JSONB NOT NULL DEFAULT '{}',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
 }
 
 // --- Users ---
@@ -231,9 +311,43 @@ export async function deleteUser(id: string) {
 
 // --- Folders ---
 
+export async function getFolder(id: string) {
+  return queryOne<{
+    id: string;
+    name: string;
+    userId: string;
+    createdAt: string;
+    updatedAt: string;
+  }>(
+    'SELECT id, name, user_id AS "userId", created_at AS "createdAt", updated_at AS "updatedAt" FROM folders WHERE id = $1',
+    [id]
+  );
+}
+
 export async function listFolders(userId: string) {
   return query(
     'SELECT id, name, client_id AS "clientId", created_at AS "createdAt", updated_at AS "updatedAt" FROM folders WHERE user_id = $1 ORDER BY name ASC',
+    [userId]
+  );
+}
+
+export async function listSharedFolders(userId: string) {
+  return query<{
+    id: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+    isShared: boolean;
+    permission: string;
+    ownerEmail: string;
+  }>(
+    `SELECT f.id, f.name, f.created_at AS "createdAt", f.updated_at AS "updatedAt",
+            TRUE AS "isShared", fs.permission, u.email AS "ownerEmail"
+     FROM folders f
+     JOIN folder_shares fs ON fs.folder_id = f.id
+     JOIN users u ON u.id = f.user_id
+     WHERE fs.shared_with_user_id = $1
+     ORDER BY f.name ASC`,
     [userId]
   );
 }
@@ -275,21 +389,67 @@ export async function deleteFolder(id: string, userId: string) {
   await query("DELETE FROM folders WHERE id = $1 AND user_id = $2", [id, userId]);
 }
 
+export async function transferFolderOwnership(folderId: string, newOwnerId: string) {
+  await query(
+    "UPDATE folders SET user_id = $1, updated_at = NOW() WHERE id = $2",
+    [newOwnerId, folderId]
+  );
+  // Transfer ownership of diagrams inside the folder to the new owner
+  await query(
+    "UPDATE diagrams SET user_id = $1 WHERE folder_id = $2",
+    [newOwnerId, folderId]
+  );
+  // Remove stale folder_shares entry for the new owner (they're now the owner)
+  await query(
+    "DELETE FROM folder_shares WHERE folder_id = $1 AND shared_with_user_id = $2",
+    [folderId, newOwnerId]
+  );
+}
+
 // --- Diagrams ---
 
-export async function listDiagrams(userId: string) {
+export async function listDiagrams(userId: string, userEmail?: string) {
+  // Get allowed org domains to check for org-shared diagrams
+  const orgDomains = (process.env.AUTH_GOOGLE_ALLOWED_DOMAINS || "").split(",").map(d => d.trim()).filter(Boolean);
+  const emailDomain = userEmail?.split("@")[1]?.toLowerCase();
+  const isOrgUser = emailDomain ? orgDomains.includes(emailDomain) : false;
+
   return query(
     `SELECT d.id, d.title, d.folder_id AS "folderId", d.updated_at AS "updatedAt",
-            FALSE AS "isShared", NULL AS "permission", NULL AS "ownerEmail"
+            FALSE AS "isShared", NULL AS "permission", NULL AS "ownerEmail", d.org_shared AS "orgShared"
      FROM diagrams d
      WHERE d.user_id = $1
      UNION ALL
      SELECT d.id, d.title, NULL AS "folderId", d.updated_at AS "updatedAt",
-            TRUE AS "isShared", ds.permission, u.email AS "ownerEmail"
+            TRUE AS "isShared", ds.permission, u.email AS "ownerEmail", d.org_shared AS "orgShared"
      FROM diagrams d
      JOIN diagram_shares ds ON ds.diagram_id = d.id
      JOIN users u ON u.id = d.user_id
      WHERE ds.shared_with_user_id = $1
+     UNION ALL
+     SELECT d.id, d.title, d.folder_id AS "folderId", d.updated_at AS "updatedAt",
+            TRUE AS "isShared", fs.permission, u.email AS "ownerEmail", d.org_shared AS "orgShared"
+     FROM diagrams d
+     JOIN folder_shares fs ON fs.folder_id = d.folder_id
+     JOIN users u ON u.id = d.user_id
+     WHERE fs.shared_with_user_id = $1
+       AND d.user_id != $1
+       AND d.id NOT IN (SELECT diagram_id FROM diagram_shares WHERE shared_with_user_id = $1)
+     ${isOrgUser ? `
+     UNION ALL
+     SELECT d.id, d.title, NULL AS "folderId", d.updated_at AS "updatedAt",
+            TRUE AS "isShared", d.org_shared AS "permission", u.email AS "ownerEmail", d.org_shared AS "orgShared"
+     FROM diagrams d
+     JOIN users u ON u.id = d.user_id
+     WHERE d.org_shared IS NOT NULL
+       AND d.user_id != $1
+       AND d.id NOT IN (SELECT diagram_id FROM diagram_shares WHERE shared_with_user_id = $1)
+       AND d.id NOT IN (
+         SELECT d2.id FROM diagrams d2
+         JOIN folder_shares fs2 ON fs2.folder_id = d2.folder_id
+         WHERE fs2.shared_with_user_id = $1
+       )
+     ` : ""}
      ORDER BY "updatedAt" DESC`,
     [userId]
   );
@@ -312,12 +472,14 @@ export async function getDiagram(id: string) {
     title: string;
     code: string;
     positions: string | null;
+    styleOverrides: string | null;
     userId: string;
     folderId: string | null;
+    orgShared: string | null;
     createdAt: string;
     updatedAt: string;
   }>(
-    'SELECT id, title, code, positions, user_id AS "userId", folder_id AS "folderId", created_at AS "createdAt", updated_at AS "updatedAt" FROM diagrams WHERE id = $1',
+    'SELECT id, title, code, positions, style_overrides AS "styleOverrides", user_id AS "userId", folder_id AS "folderId", org_shared AS "orgShared", created_at AS "createdAt", updated_at AS "updatedAt" FROM diagrams WHERE id = $1',
     [id]
   );
 }
@@ -338,7 +500,7 @@ export async function createDiagram(
 
 export async function updateDiagram(
   id: string,
-  data: { title?: string; code?: string; positions?: string | null; folderId?: string | null }
+  data: { title?: string; code?: string; positions?: string | null; styleOverrides?: string | null; folderId?: string | null; orgShared?: string | null }
 ) {
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -356,9 +518,17 @@ export async function updateDiagram(
     fields.push(`positions = $${paramIdx++}`);
     values.push(data.positions);
   }
+  if (data.styleOverrides !== undefined) {
+    fields.push(`style_overrides = $${paramIdx++}`);
+    values.push(data.styleOverrides);
+  }
   if (data.folderId !== undefined) {
     fields.push(`folder_id = $${paramIdx++}`);
     values.push(data.folderId);
+  }
+  if (data.orgShared !== undefined) {
+    fields.push(`org_shared = $${paramIdx++}`);
+    values.push(data.orgShared);
   }
 
   if (fields.length === 0) return getDiagram(id);
@@ -381,7 +551,8 @@ export async function deleteDiagram(id: string) {
 
 export async function canAccessDiagram(
   diagramId: string,
-  userId: string
+  userId: string,
+  userEmail?: string
 ): Promise<{ access: boolean; permission: "owner" | "edit" | "view" | null }> {
   const diagram = await getDiagram(diagramId);
   if (!diagram) return { access: false, permission: null };
@@ -397,6 +568,26 @@ export async function canAccessDiagram(
 
   if (share) {
     return { access: true, permission: share.permission as "edit" | "view" };
+  }
+
+  // Check folder-level sharing
+  if (diagram.folderId) {
+    const folderShare = await queryOne<{ permission: string }>(
+      "SELECT permission FROM folder_shares WHERE folder_id = $1 AND shared_with_user_id = $2",
+      [diagram.folderId, userId]
+    );
+    if (folderShare) {
+      return { access: true, permission: folderShare.permission as "view" };
+    }
+  }
+
+  // Check org-wide sharing
+  if (diagram.orgShared && userEmail) {
+    const orgDomains = (process.env.AUTH_GOOGLE_ALLOWED_DOMAINS || "").split(",").map(d => d.trim()).filter(Boolean);
+    const emailDomain = userEmail.split("@")[1]?.toLowerCase();
+    if (emailDomain && orgDomains.includes(emailDomain)) {
+      return { access: true, permission: diagram.orgShared as "edit" | "view" };
+    }
   }
 
   return { access: false, permission: null };
@@ -438,6 +629,45 @@ export async function removeDiagramShare(diagramId: string, sharedWithUserId: st
   await query(
     "DELETE FROM diagram_shares WHERE diagram_id = $1 AND shared_with_user_id = $2",
     [diagramId, sharedWithUserId]
+  );
+}
+
+// --- Folder Sharing ---
+
+export async function listFolderShares(folderId: string) {
+  return query<{
+    id: string;
+    folderId: string;
+    sharedWithUserId: string;
+    permission: string;
+    email: string;
+    name: string;
+    createdAt: string;
+  }>(
+    'SELECT fs.id, fs.folder_id AS "folderId", fs.shared_with_user_id AS "sharedWithUserId", fs.permission, u.email, u.name, fs.created_at AS "createdAt" FROM folder_shares fs JOIN users u ON u.id = fs.shared_with_user_id WHERE fs.folder_id = $1 ORDER BY fs.created_at ASC',
+    [folderId]
+  );
+}
+
+export async function shareFolder(
+  id: string,
+  folderId: string,
+  sharedWithUserId: string,
+  permission: string
+) {
+  await query(
+    `INSERT INTO folder_shares (id, folder_id, shared_with_user_id, permission)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (folder_id, shared_with_user_id)
+     DO UPDATE SET permission = $4`,
+    [id, folderId, sharedWithUserId, permission]
+  );
+}
+
+export async function removeFolderShare(folderId: string, sharedWithUserId: string) {
+  await query(
+    "DELETE FROM folder_shares WHERE folder_id = $1 AND shared_with_user_id = $2",
+    [folderId, sharedWithUserId]
   );
 }
 
@@ -584,5 +814,132 @@ export async function listSettings(): Promise<AppSettingRow[]> {
     "SELECT key, value, updated_at, updated_by FROM app_settings ORDER BY key ASC"
   );
 }
+
+// --- API Keys ---
+
+export interface ApiKeyRow {
+  id: string;
+  userId: string;
+  name: string;
+  keyPrefix: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export async function createApiKey(
+  id: string,
+  userId: string,
+  name: string,
+  keyHash: string,
+  keyPrefix: string,
+  expiresAt?: string | null
+) {
+  await query(
+    `INSERT INTO api_keys (id, user_id, name, key_hash, key_prefix, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [id, userId, name, keyHash, keyPrefix, expiresAt ?? null]
+  );
+}
+
+export async function listApiKeys(userId: string) {
+  return query<ApiKeyRow>(
+    `SELECT id, user_id AS "userId", name, key_prefix AS "keyPrefix",
+            last_used_at AS "lastUsedAt", expires_at AS "expiresAt",
+            revoked_at AS "revokedAt", created_at AS "createdAt"
+     FROM api_keys WHERE user_id = $1
+     ORDER BY created_at DESC`,
+    [userId]
+  );
+}
+
+export async function getApiKeyByHash(keyHash: string) {
+  return queryOne<{
+    id: string;
+    userId: string;
+    name: string;
+    revokedAt: string | null;
+    expiresAt: string | null;
+  }>(
+    `SELECT id, user_id AS "userId", name,
+            revoked_at AS "revokedAt", expires_at AS "expiresAt"
+     FROM api_keys
+     WHERE key_hash = $1
+       AND revoked_at IS NULL
+       AND (expires_at IS NULL OR expires_at > NOW())`,
+    [keyHash]
+  );
+}
+
+export async function revokeApiKey(id: string, userId: string) {
+  await query(
+    "UPDATE api_keys SET revoked_at = NOW() WHERE id = $1 AND user_id = $2",
+    [id, userId]
+  );
+}
+
+export async function touchApiKeyLastUsed(id: string) {
+  await query("UPDATE api_keys SET last_used_at = NOW() WHERE id = $1", [id]);
+}
+
+// --- User Preferences ---
+
+export interface UserPreferencesRow {
+  user_id: string;
+  preferences: Record<string, unknown>;
+  updated_at: string;
+}
+
+export async function getUserPreferences(userId: string): Promise<Record<string, unknown>> {
+  const row = await queryOne<UserPreferencesRow>(
+    "SELECT preferences FROM user_preferences WHERE user_id = $1",
+    [userId]
+  );
+  return (row?.preferences as Record<string, unknown>) ?? {};
+}
+
+export async function setUserPreferences(
+  userId: string,
+  preferences: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  await query(
+    `INSERT INTO user_preferences (user_id, preferences, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id)
+     DO UPDATE SET preferences = user_preferences.preferences || $2, updated_at = NOW()`,
+    [userId, JSON.stringify(preferences)]
+  );
+  return getUserPreferences(userId);
+}
+
+export interface UserPreferenceRow {
+  user_id: string;
+  send_mode: string;
+  updated_at: string;
+}
+
+export async function getUserPreference(userId: string): Promise<UserPreferenceRow | null> {
+  return queryOne<UserPreferenceRow>(
+    "SELECT user_id, send_mode, updated_at FROM user_preferences WHERE user_id = $1",
+    [userId]
+  );
+}
+
+export async function setUserPreference(
+  userId: string,
+  data: { sendMode?: string }
+): Promise<void> {
+  if (data.sendMode !== undefined) {
+    await query(
+      `INSERT INTO user_preferences (user_id, send_mode, updated_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (user_id)
+       DO UPDATE SET send_mode = $2, updated_at = NOW()`,
+      [userId, data.sendMode]
+    );
+  }
+}
+
 
 export default getPool;

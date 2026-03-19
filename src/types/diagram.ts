@@ -3,7 +3,9 @@ export interface DiagramState {
   title: string;
   code: string;
   positions: string | null;
+  styleOverrides: string | null;
   folderId: string | null;
+  permission: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -22,4 +24,7 @@ export interface Folder {
   id: string;
   name: string;
   clientId: string | null;
+  isShared?: boolean;
+  permission?: string;
+  ownerEmail?: string;
 }

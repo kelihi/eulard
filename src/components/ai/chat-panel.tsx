@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
 import { ChatMessage } from "./chat-message";
 import { downloadPng, downloadSvg, downloadMermaidCode } from "@/lib/export";
@@ -70,14 +70,49 @@ export function ChatPanel() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
   const folderId = useDiagramStore((s) => s.diagram?.folderId ?? null);
   const diagramId = useDiagramStore((s) => s.diagram?.id ?? "");
+  const selectedNodeIds = useDiagramStore((s) => s.selectedNodeIds);
+  const selectedEdgeIds = useDiagramStore((s) => s.selectedEdgeIds);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showDone, setShowDone] = useState(false);
+  const [sendMode, setSendMode] = useState<"cmd_enter" | "enter">("cmd_enter");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [showSessionList, setShowSessionList] = useState(false);
   const sessionListRef = useRef<HTMLDivElement>(null);
+  const autoLoadedRef = useRef(false);
 
-  // Load sessions for current diagram
+  // Load user send-mode preference
+  useEffect(() => {
+    fetch("/api/preferences")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.sendMode === "enter" || data.sendMode === "cmd_enter") {
+          setSendMode(data.sendMode);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Auto-resize textarea
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 150) + "px";
+    }
+  }, []);
+
+  // Handle textarea change (for auto-grow)
+  const handleTextareaChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
+      handleInputChange(e);
+      resizeTextarea();
+    },
+    [handleInputChange, resizeTextarea]
+  );
+
+  // Load sessions for current diagram (imperative, for refreshes after chat/delete)
   const loadSessions = useCallback(async () => {
     if (!diagramId) return;
     try {
@@ -91,9 +126,24 @@ export function ChatPanel() {
     }
   }, [diagramId]);
 
+  // Effect-based load with stale-fetch guard to prevent race conditions
+  // when switching diagrams quickly
   useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
+    let cancelled = false;
+    (async () => {
+      if (!diagramId) return;
+      try {
+        const res = await fetch(`/api/chat-sessions?diagramId=${diagramId}`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setSessions(data);
+        }
+      } catch {
+        // Silently fail
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [diagramId]);
 
   // Close session list when clicking outside
   useEffect(() => {
@@ -111,7 +161,14 @@ export function ChatPanel() {
   const { messages, input, handleInputChange, handleSubmit, status, setMessages } =
     useChat({
       api: "/api/ai/chat",
-      body: { currentCode: code, folderId, sessionId, diagramId },
+      body: {
+        currentCode: code,
+        folderId,
+        sessionId,
+        diagramId,
+        selectedNodeIds: selectedNodeIds.length > 0 ? selectedNodeIds : undefined,
+        selectedEdgeIds: selectedEdgeIds.length > 0 ? selectedEdgeIds : undefined,
+      },
       onToolCall: async ({ toolCall }) => {
         pendingToolCalls++;
         try {
@@ -152,7 +209,17 @@ export function ChatPanel() {
   useEffect(() => {
     setSessionId(null);
     setMessages([]);
+    setSessions([]);
+    autoLoadedRef.current = false;
   }, [diagramId, setMessages]);
+
+  // Auto-load the most recent session so users see their chat history
+  useEffect(() => {
+    if (sessions.length > 0 && !sessionId && !autoLoadedRef.current) {
+      autoLoadedRef.current = true;
+      loadSession(sessions[0].id);
+    }
+  }, [sessions, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load a previous session
   const loadSession = async (id: string) => {
@@ -325,27 +392,66 @@ export function ChatPanel() {
         )}
       </div>
 
+      {/* Selection indicator */}
+      {(selectedNodeIds.length > 0 || selectedEdgeIds.length > 0) && (
+        <div className="px-3 py-1.5 border-t border-[var(--border)] bg-[var(--primary)]/10 text-xs text-[var(--primary)] flex items-center gap-1.5">
+          <span className="font-medium">Selection:</span>
+          {selectedNodeIds.length > 0 && (
+            <span>{selectedNodeIds.length} node{selectedNodeIds.length !== 1 ? "s" : ""}</span>
+          )}
+          {selectedNodeIds.length > 0 && selectedEdgeIds.length > 0 && <span>&middot;</span>}
+          {selectedEdgeIds.length > 0 && (
+            <span>{selectedEdgeIds.length} edge{selectedEdgeIds.length !== 1 ? "s" : ""}</span>
+          )}
+          <span className="text-[var(--muted-foreground)] ml-auto">AI will only modify selected</span>
+        </div>
+      )}
+
       {/* Input */}
       <form
         onSubmit={handleSubmit}
         className="p-3 border-t border-[var(--border)] shrink-0"
       >
-        <div className="flex gap-2">
-          <input
+        <div className="flex gap-2 items-end">
+          <textarea
+            ref={textareaRef}
             value={input}
-            onChange={handleInputChange}
+            onChange={handleTextareaChange}
+            onKeyDown={(e) => {
+              if (sendMode === "cmd_enter") {
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              } else {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }
+            }}
             placeholder="Describe your diagram..."
             disabled={isLoading}
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50"
+            rows={1}
+            className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50 resize-none overflow-y-auto"
+            style={{ maxHeight: "150px" }}
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+            title={sendMode === "cmd_enter" ? "Send (Cmd+Enter)" : "Send (Enter)"}
+            className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
           >
             <Send className="w-4 h-4" />
           </button>
         </div>
+        <p className="text-[10px] text-[var(--muted-foreground)] mt-1">
+          {sendMode === "cmd_enter"
+            ? typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent)
+              ? "Cmd+Enter to send, Enter for new line"
+              : "Ctrl+Enter to send, Enter for new line"
+            : "Enter to send, Shift+Enter for new line"}
+        </p>
       </form>
     </div>
   );
