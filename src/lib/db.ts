@@ -185,9 +185,14 @@ export async function initializeDatabase(): Promise<void> {
     CREATE TABLE IF NOT EXISTS user_preferences (
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       send_mode TEXT NOT NULL DEFAULT 'cmd_enter' CHECK (send_mode IN ('cmd_enter', 'enter')),
+      preferences JSONB NOT NULL DEFAULT '{}',
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // Migration: add preferences column to existing user_preferences tables
+  await query("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS preferences JSONB NOT NULL DEFAULT '{}'");
+  await query("ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS send_mode TEXT NOT NULL DEFAULT 'cmd_enter'");
 
   // Migration: add style_overrides column to existing diagrams tables
   await query(`
@@ -215,14 +220,6 @@ export async function initializeDatabase(): Promise<void> {
     END $$;
   `);
 
-  // User preferences (per-user settings like keyboard shortcuts)
-  await query(`
-    CREATE TABLE IF NOT EXISTS user_preferences (
-      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-      preferences JSONB NOT NULL DEFAULT '{}',
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
 }
 
 // --- Users ---
