@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { listFolders, createFolder, updateFolder, deleteFolder } from "@/lib/db";
+import { listFolders, listSharedFolders, createFolder, updateFolder, deleteFolder } from "@/lib/db";
 import { authenticateRequest } from "@/lib/auth";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -14,9 +14,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const folders = await listFolders(user.id);
-    log.done(200, `listed ${folders.length} folders`, { userId: user.id });
-    return NextResponse.json(folders);
+    const [owned, shared] = await Promise.all([
+      listFolders(user.id),
+      listSharedFolders(user.id),
+    ]);
+    log.done(200, `listed ${owned.length} owned, ${shared.length} shared folders`, { userId: user.id });
+    return NextResponse.json({ owned, shared });
   } catch (err) {
     log.fail(err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

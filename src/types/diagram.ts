@@ -23,4 +23,7 @@ export interface DiagramListItem {
 export interface Folder {
   id: string;
   name: string;
+  isShared?: boolean;
+  permission?: string;
+  ownerEmail?: string;
 }

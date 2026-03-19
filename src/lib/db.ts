@@ -141,6 +141,19 @@ export async function initializeDatabase(): Promise<void> {
   await query("CREATE INDEX IF NOT EXISTS idx_folders_user_id ON folders(user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_diagram_shares_diagram ON diagram_shares(diagram_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_diagram_shares_user ON diagram_shares(shared_with_user_id)");
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS folder_shares (
+      id TEXT PRIMARY KEY,
+      folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+      shared_with_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      permission TEXT NOT NULL DEFAULT 'view' CHECK (permission IN ('view')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(folder_id, shared_with_user_id)
+    )
+  `);
+  await query("CREATE INDEX IF NOT EXISTS idx_folder_shares_folder ON folder_shares(folder_id)");
+  await query("CREATE INDEX IF NOT EXISTS idx_folder_shares_user ON folder_shares(shared_with_user_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
   await query("CREATE INDEX IF NOT EXISTS idx_chat_sessions_diagram ON chat_sessions(diagram_id)");
   await query("CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions(user_id)");
@@ -277,9 +290,43 @@ export async function deleteUser(id: string) {
 
 // --- Folders ---
 
+export async function getFolder(id: string) {
+  return queryOne<{
+    id: string;
+    name: string;
+    userId: string;
+    createdAt: string;
+    updatedAt: string;
+  }>(
+    'SELECT id, name, user_id AS "userId", created_at AS "createdAt", updated_at AS "updatedAt" FROM folders WHERE id = $1',
+    [id]
+  );
+}
+
 export async function listFolders(userId: string) {
   return query(
     'SELECT id, name, created_at AS "createdAt", updated_at AS "updatedAt" FROM folders WHERE user_id = $1 ORDER BY name ASC',
+    [userId]
+  );
+}
+
+export async function listSharedFolders(userId: string) {
+  return query<{
+    id: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+    isShared: boolean;
+    permission: string;
+    ownerEmail: string;
+  }>(
+    `SELECT f.id, f.name, f.created_at AS "createdAt", f.updated_at AS "updatedAt",
+            TRUE AS "isShared", fs.permission, u.email AS "ownerEmail"
+     FROM folders f
+     JOIN folder_shares fs ON fs.folder_id = f.id
+     JOIN users u ON u.id = f.user_id
+     WHERE fs.shared_with_user_id = $1
+     ORDER BY f.name ASC`,
     [userId]
   );
 }
@@ -303,6 +350,13 @@ export async function deleteFolder(id: string, userId: string) {
   await query("DELETE FROM folders WHERE id = $1 AND user_id = $2", [id, userId]);
 }
 
+export async function transferFolderOwnership(folderId: string, newOwnerId: string) {
+  await query(
+    "UPDATE folders SET user_id = $1, updated_at = NOW() WHERE id = $2",
+    [newOwnerId, folderId]
+  );
+}
+
 // --- Diagrams ---
 
 export async function listDiagrams(userId: string, userEmail?: string) {
@@ -323,6 +377,15 @@ export async function listDiagrams(userId: string, userEmail?: string) {
      JOIN diagram_shares ds ON ds.diagram_id = d.id
      JOIN users u ON u.id = d.user_id
      WHERE ds.shared_with_user_id = $1
+     UNION ALL
+     SELECT d.id, d.title, d.folder_id AS "folderId", d.updated_at AS "updatedAt",
+            TRUE AS "isShared", fs.permission, u.email AS "ownerEmail", d.org_shared AS "orgShared"
+     FROM diagrams d
+     JOIN folder_shares fs ON fs.folder_id = d.folder_id
+     JOIN users u ON u.id = d.user_id
+     WHERE fs.shared_with_user_id = $1
+       AND d.user_id != $1
+       AND d.id NOT IN (SELECT diagram_id FROM diagram_shares WHERE shared_with_user_id = $1)
      ${isOrgUser ? `
      UNION ALL
      SELECT d.id, d.title, NULL AS "folderId", d.updated_at AS "updatedAt",
@@ -332,6 +395,11 @@ export async function listDiagrams(userId: string, userEmail?: string) {
      WHERE d.org_shared IS NOT NULL
        AND d.user_id != $1
        AND d.id NOT IN (SELECT diagram_id FROM diagram_shares WHERE shared_with_user_id = $1)
+       AND d.id NOT IN (
+         SELECT d2.id FROM diagrams d2
+         JOIN folder_shares fs2 ON fs2.folder_id = d2.folder_id
+         WHERE fs2.shared_with_user_id = $1
+       )
      ` : ""}
      ORDER BY "updatedAt" DESC`,
     [userId]
@@ -442,6 +510,17 @@ export async function canAccessDiagram(
     return { access: true, permission: share.permission as "edit" | "view" };
   }
 
+  // Check folder-level sharing
+  if (diagram.folderId) {
+    const folderShare = await queryOne<{ permission: string }>(
+      "SELECT permission FROM folder_shares WHERE folder_id = $1 AND shared_with_user_id = $2",
+      [diagram.folderId, userId]
+    );
+    if (folderShare) {
+      return { access: true, permission: folderShare.permission as "view" };
+    }
+  }
+
   // Check org-wide sharing
   if (diagram.orgShared && userEmail) {
     const orgDomains = (process.env.AUTH_GOOGLE_ALLOWED_DOMAINS || "").split(",").map(d => d.trim()).filter(Boolean);
@@ -490,6 +569,45 @@ export async function removeDiagramShare(diagramId: string, sharedWithUserId: st
   await query(
     "DELETE FROM diagram_shares WHERE diagram_id = $1 AND shared_with_user_id = $2",
     [diagramId, sharedWithUserId]
+  );
+}
+
+// --- Folder Sharing ---
+
+export async function listFolderShares(folderId: string) {
+  return query<{
+    id: string;
+    folderId: string;
+    sharedWithUserId: string;
+    permission: string;
+    email: string;
+    name: string;
+    createdAt: string;
+  }>(
+    'SELECT fs.id, fs.folder_id AS "folderId", fs.shared_with_user_id AS "sharedWithUserId", fs.permission, u.email, u.name, fs.created_at AS "createdAt" FROM folder_shares fs JOIN users u ON u.id = fs.shared_with_user_id WHERE fs.folder_id = $1 ORDER BY fs.created_at ASC',
+    [folderId]
+  );
+}
+
+export async function shareFolder(
+  id: string,
+  folderId: string,
+  sharedWithUserId: string,
+  permission: string
+) {
+  await query(
+    `INSERT INTO folder_shares (id, folder_id, shared_with_user_id, permission)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (folder_id, shared_with_user_id)
+     DO UPDATE SET permission = $4`,
+    [id, folderId, sharedWithUserId, permission]
+  );
+}
+
+export async function removeFolderShare(folderId: string, sharedWithUserId: string) {
+  await query(
+    "DELETE FROM folder_shares WHERE folder_id = $1 AND shared_with_user_id = $2",
+    [folderId, sharedWithUserId]
   );
 }
 
