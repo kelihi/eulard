@@ -10,6 +10,17 @@ steps:
       - '.'
     id: 'build'
 
+  # Push images to Artifact Registry before deploying
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:${_TAG}']
+    id: 'push-tag'
+    waitFor: ['build']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:latest']
+    id: 'push-latest'
+    waitFor: ['build']
+
   # Update Cloud Run prod service with the new image
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
@@ -22,7 +33,7 @@ steps:
       - '--region=us-central1'
       - '--project=$PROJECT_ID'
     id: 'deploy'
-    waitFor: ['build']
+    waitFor: ['push-tag']
 
 substitutions:
   _TAG: 'latest'
