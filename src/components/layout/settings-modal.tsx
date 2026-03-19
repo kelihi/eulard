@@ -98,11 +98,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setShortcutSaving(true);
     setShortcutMessage(null);
     try {
-      await fetch("/api/user-preferences", {
+      const res = await fetch("/api/user-preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sidebarToggleShortcut: shortcut }),
       });
+      if (!res.ok) throw new Error("Failed to save");
       setShortcutMessage("Shortcut saved.");
       // Notify the keyboard shortcuts hook
       window.dispatchEvent(
