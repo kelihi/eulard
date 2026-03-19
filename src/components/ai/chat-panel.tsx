@@ -68,6 +68,7 @@ function maybeEndBatch() {
 
 export function ChatPanel() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
+  const folderId = useDiagramStore((s) => s.diagram?.folderId ?? null);
   const diagramId = useDiagramStore((s) => s.diagram?.id ?? "");
   const selectedNodeIds = useDiagramStore((s) => s.selectedNodeIds);
   const selectedEdgeIds = useDiagramStore((s) => s.selectedEdgeIds);
@@ -162,6 +163,7 @@ export function ChatPanel() {
       api: "/api/ai/chat",
       body: {
         currentCode: code,
+        folderId,
         sessionId,
         diagramId,
         selectedNodeIds: selectedNodeIds.length > 0 ? selectedNodeIds : undefined,

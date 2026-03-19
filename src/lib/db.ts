@@ -75,10 +75,14 @@ export async function initializeDatabase(): Promise<void> {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL DEFAULT 'New Folder',
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_id TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+
+  // Ensure client_id column exists on pre-existing folders tables
+  await query("ALTER TABLE folders ADD COLUMN IF NOT EXISTS client_id TEXT");
 
   await query(`
     CREATE TABLE IF NOT EXISTS diagrams (
@@ -322,7 +326,7 @@ export async function getFolder(id: string) {
 
 export async function listFolders(userId: string) {
   return query(
-    'SELECT id, name, created_at AS "createdAt", updated_at AS "updatedAt" FROM folders WHERE user_id = $1 ORDER BY name ASC',
+    'SELECT id, name, client_id AS "clientId", created_at AS "createdAt", updated_at AS "updatedAt" FROM folders WHERE user_id = $1 ORDER BY name ASC',
     [userId]
   );
 }
@@ -348,18 +352,36 @@ export async function listSharedFolders(userId: string) {
   );
 }
 
-export async function createFolder(id: string, name: string, userId: string) {
+export async function createFolder(id: string, name: string, userId: string, clientId?: string) {
   await query(
-    "INSERT INTO folders (id, name, user_id) VALUES ($1, $2, $3)",
-    [id, name, userId]
+    "INSERT INTO folders (id, name, user_id, client_id) VALUES ($1, $2, $3, $4)",
+    [id, name, userId, clientId ?? null]
   );
-  return { id, name };
+  return { id, name, clientId: clientId ?? null };
 }
 
-export async function updateFolder(id: string, name: string, userId: string) {
+export async function updateFolder(id: string, data: { name?: string; clientId?: string | null }, userId: string) {
+  const fields: string[] = [];
+  const values: unknown[] = [];
+  let paramIdx = 1;
+
+  if (data.name !== undefined) {
+    fields.push(`name = $${paramIdx++}`);
+    values.push(data.name);
+  }
+  if (data.clientId !== undefined) {
+    fields.push(`client_id = $${paramIdx++}`);
+    values.push(data.clientId);
+  }
+
+  if (fields.length === 0) return;
+
+  fields.push("updated_at = NOW()");
+  values.push(id, userId);
+
   await query(
-    "UPDATE folders SET name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3",
-    [name, id, userId]
+    `UPDATE folders SET ${fields.join(", ")} WHERE id = $${paramIdx++} AND user_id = $${paramIdx}`,
+    values
   );
 }
 
@@ -430,6 +452,17 @@ export async function listDiagrams(userId: string, userEmail?: string) {
      ` : ""}
      ORDER BY "updatedAt" DESC`,
     [userId]
+  );
+}
+
+export async function getFolder(id: string, userId: string) {
+  return queryOne<{
+    id: string;
+    name: string;
+    clientId: string | null;
+  }>(
+    'SELECT id, name, client_id AS "clientId" FROM folders WHERE id = $1 AND user_id = $2',
+    [id, userId]
   );
 }
 

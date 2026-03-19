@@ -14,8 +14,10 @@ import {
   Pencil,
   ChevronRight,
   Users,
+  Building2,
   Share2,
 } from "lucide-react";
+import { ClientPicker } from "./client-picker";
 import { FolderShareModal } from "@/components/layout/folder-share-modal";
 
 export function Sidebar() {
@@ -39,6 +41,7 @@ export function Sidebar() {
   const editInputRef = useRef<HTMLInputElement>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [sharedExpanded, setSharedExpanded] = useState(true);
+  const [clientPickerFolderId, setClientPickerFolderId] = useState<string | null>(null);
   const [sharedFoldersExpanded, setSharedFoldersExpanded] = useState(true);
   const [shareFolderModal, setShareFolderModal] = useState<{ id: string; name: string } | null>(null);
 
@@ -199,7 +202,7 @@ export function Sidebar() {
           const isDragOver = dragOverFolderId === folder.id;
 
           return (
-            <div key={folder.id}>
+            <div key={folder.id} className="relative">
               <div
                 onClick={() => toggleFolder(folder.id)}
                 onDragOver={(e) => handleDragOver(e, folder.id)}
@@ -276,6 +279,21 @@ export function Sidebar() {
                     <Pencil className="w-3 h-3" />
                   </button>
                   <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setClientPickerFolderId(
+                        clientPickerFolderId === folder.id ? null : folder.id
+                      );
+                    }}
+                    className={cn(
+                      "p-0.5 rounded hover:bg-[var(--border)]",
+                      folder.clientId && "opacity-100 text-[var(--primary)]"
+                    )}
+                    title={folder.clientId ? "Change client" : "Set client context"}
+                  >
+                    <Building2 className="w-3 h-3" />
+                  </button>
+                  <button
                     onClick={(e) => handleDeleteFolder(e, folder.id)}
                     className="p-0.5 rounded hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]"
                     title="Delete folder"
@@ -283,6 +301,13 @@ export function Sidebar() {
                     <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
+                {clientPickerFolderId === folder.id && (
+                  <ClientPicker
+                    folderId={folder.id}
+                    currentClientId={folder.clientId}
+                    onClose={() => setClientPickerFolderId(null)}
+                  />
+                )}
               </div>
 
               {isExpanded && (
