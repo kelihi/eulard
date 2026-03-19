@@ -23,6 +23,13 @@ interface DiagramStore {
   beginBatch: () => void;
   endBatch: () => void;
 
+  // Multi-selection state
+  selectedNodeIds: string[];
+  selectedEdgeIds: string[];
+  setSelectedNodeIds: (ids: string[]) => void;
+  setSelectedEdgeIds: (ids: string[]) => void;
+  clearSelection: () => void;
+
   setCode: (code: string) => void;
   setTitle: (title: string) => void;
   setPositions: (positions: string) => void;
@@ -70,6 +77,13 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   canUndo: false,
   canRedo: false,
   _batchStartCode: undefined,
+
+  // Multi-selection state
+  selectedNodeIds: [],
+  selectedEdgeIds: [],
+  setSelectedNodeIds: (ids: string[]) => set({ selectedNodeIds: ids }),
+  setSelectedEdgeIds: (ids: string[]) => set({ selectedEdgeIds: ids }),
+  clearSelection: () => set({ selectedNodeIds: [], selectedEdgeIds: [] }),
 
   beginBatch: () => {
     const { diagram } = get();
@@ -217,6 +231,8 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
       redoStack: [],
       canUndo: false,
       canRedo: false,
+      selectedNodeIds: [],
+      selectedEdgeIds: [],
     });
   },
 

@@ -52,6 +52,7 @@ function EditableEdge({
   data,
   style,
   markerEnd,
+  selected,
 }: EdgeProps) {
   const edgeData = data as unknown as CustomEdgeData;
   const label = edgeData?.edgeLabel ?? "";
@@ -118,7 +119,11 @@ function EditableEdge({
       <BaseEdge
         id={id}
         path={edgePath}
-        style={{ ...style, ...pathStyle }}
+        style={{
+          ...style,
+          ...pathStyle,
+          ...(selected ? { stroke: "var(--primary)", strokeWidth: 3 } : {}),
+        }}
         markerEnd={markerEnd}
       />
       <EdgeLabelRenderer>
