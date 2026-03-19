@@ -69,6 +69,8 @@ function maybeEndBatch() {
 export function ChatPanel() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
   const diagramId = useDiagramStore((s) => s.diagram?.id ?? "");
+  const selectedNodeIds = useDiagramStore((s) => s.selectedNodeIds);
+  const selectedEdgeIds = useDiagramStore((s) => s.selectedEdgeIds);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showDone, setShowDone] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -111,7 +113,13 @@ export function ChatPanel() {
   const { messages, input, handleInputChange, handleSubmit, status, setMessages } =
     useChat({
       api: "/api/ai/chat",
-      body: { currentCode: code, sessionId, diagramId },
+      body: {
+        currentCode: code,
+        sessionId,
+        diagramId,
+        selectedNodeIds: selectedNodeIds.length > 0 ? selectedNodeIds : undefined,
+        selectedEdgeIds: selectedEdgeIds.length > 0 ? selectedEdgeIds : undefined,
+      },
       onToolCall: async ({ toolCall }) => {
         pendingToolCalls++;
         try {
@@ -334,6 +342,21 @@ export function ChatPanel() {
           </div>
         )}
       </div>
+
+      {/* Selection indicator */}
+      {(selectedNodeIds.length > 0 || selectedEdgeIds.length > 0) && (
+        <div className="px-3 py-1.5 border-t border-[var(--border)] bg-[var(--primary)]/10 text-xs text-[var(--primary)] flex items-center gap-1.5">
+          <span className="font-medium">Selection:</span>
+          {selectedNodeIds.length > 0 && (
+            <span>{selectedNodeIds.length} node{selectedNodeIds.length !== 1 ? "s" : ""}</span>
+          )}
+          {selectedNodeIds.length > 0 && selectedEdgeIds.length > 0 && <span>&middot;</span>}
+          {selectedEdgeIds.length > 0 && (
+            <span>{selectedEdgeIds.length} edge{selectedEdgeIds.length !== 1 ? "s" : ""}</span>
+          )}
+          <span className="text-[var(--muted-foreground)] ml-auto">AI will only modify selected</span>
+        </div>
+      )}
 
       {/* Input */}
       <form

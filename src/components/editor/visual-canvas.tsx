@@ -8,10 +8,12 @@ import {
   MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
+  SelectionMode,
   type Node,
   type Edge,
   type NodeChange,
   type EdgeChange,
+  type OnSelectionChangeParams,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useDiagramStore } from "@/stores/diagram-store";
@@ -47,6 +49,9 @@ export function VisualCanvas() {
   const setCode = useDiagramStore((s) => s.setCode);
   const setPositions = useDiagramStore((s) => s.setPositions);
   const syncState = useDiagramStore((s) => s.syncState);
+  const setSelectedNodeIds = useDiagramStore((s) => s.setSelectedNodeIds);
+  const setSelectedEdgeIds = useDiagramStore((s) => s.setSelectedEdgeIds);
+  const clearSelection = useDiagramStore((s) => s.clearSelection);
 
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -356,10 +361,20 @@ export function VisualCanvas() {
     [isLocked, syncGraphToCode]
   );
 
-  // Close context menu on pane click
+  // Sync React Flow selection to store
+  const onSelectionChange = useCallback(
+    ({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
+      setSelectedNodeIds(selectedNodes.map((n) => n.id));
+      setSelectedEdgeIds(selectedEdges.map((e) => e.id));
+    },
+    [setSelectedNodeIds, setSelectedEdgeIds]
+  );
+
+  // Close context menu on pane click and clear selection
   const onPaneClick = useCallback(() => {
     setContextMenu(null);
-  }, []);
+    clearSelection();
+  }, [clearSelection]);
 
   return (
     <div className="h-full w-full relative">
@@ -377,12 +392,18 @@ export function VisualCanvas() {
         onEdgesChange={onEdgesChange}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
+        onSelectionChange={onSelectionChange}
         nodeTypes={customNodeTypes}
         edgeTypes={customEdgeTypes}
         fitView
         nodesDraggable={!isLocked}
         nodesConnectable={false}
         elementsSelectable={!isLocked}
+        selectionOnDrag={!isLocked}
+        selectionMode={SelectionMode.Partial}
+        selectionKeyCode={null}
+        multiSelectionKeyCode="Shift"
+        panOnDrag={[1]}
         proOptions={{ hideAttribution: true }}
       >
         <Background />

@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { messages, currentCode, sessionId, diagramId } = await request.json();
+  const { messages, currentCode, sessionId, diagramId, selectedNodeIds, selectedEdgeIds } = await request.json();
 
   // Resolve or create chat session
   let resolvedSessionId: string | null = sessionId ?? null;
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
 
   const result = streamText({
     model: anthropic(modelId),
-    system: buildSystemPrompt(currentCode || "", customPrompt),
+    system: buildSystemPrompt(currentCode || "", customPrompt, selectedNodeIds, selectedEdgeIds),
     messages,
     tools: {
       addNodes: tool({
