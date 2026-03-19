@@ -35,6 +35,8 @@ import {
 } from "@/lib/feedback-system";
 import type { ClientResponse } from "@/lib/feedback-system";
 
+export const maxDuration = 60;
+
 function getApiKey(): string | null {
   if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
   return null;
@@ -98,7 +100,6 @@ function formatClientContext(client: ClientResponse): string {
   return lines.join("\n");
 }
 
-const AI_MODEL = "claude-sonnet-4-20250514";
 
 export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { messages, currentCode, folderId, sessionId, diagramId, selectedNodeIds, selectedEdgeIds } = await request.json();
+  const { messages, currentCode, folderId, sessionId, diagramId, selectedNodeIds, selectedEdgeIds, maxSteps: clientMaxSteps, model: clientModel } = await request.json();
 
   // If the diagram is in a folder with a bound client, pre-fetch context
   let folderClientContext: string | null = null;
@@ -172,13 +173,19 @@ export async function POST(request: Request) {
     }
   }
 
-  // Load custom AI settings from the database
-  const [customPrompt, customModel] = await Promise.all([
-    getSetting("ai_system_prompt"),
-    getSetting("ai_model"),
-  ]);
+  const allowedModels = [
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
+  ];
+  const modelId = allowedModels.includes(clientModel)
+    ? clientModel
+    : "claude-sonnet-4-6";
+  const maxSteps = typeof clientMaxSteps === "number"
+    ? Math.max(1, Math.min(100, clientMaxSteps))
+    : 15;
 
-  const modelId = customModel || AI_MODEL;
+  // Load custom system prompt from the database
+  const customPrompt = await getSetting("ai_system_prompt");
 
   logger.info("ai-chat-started", {
     requestId,
@@ -300,7 +307,7 @@ export async function POST(request: Request) {
     system: buildSystemPrompt(currentCode || "", customPrompt, folderClientContext, selectedNodeIds, selectedEdgeIds),
     messages,
     tools: allTools,
-    maxSteps: 15,
+    maxSteps,
     experimental_telemetry: { isEnabled: true },
     onFinish: async ({ text, toolCalls, usage, finishReason, steps }) => {
       // Log telemetry

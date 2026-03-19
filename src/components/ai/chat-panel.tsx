@@ -26,11 +26,13 @@ import {
   updateEdgesSchema,
   replaceDiagramSchema,
 } from "@/lib/ai/tools";
+import { useAISettingsStore } from "@/stores/ai-settings-store";
 import {
   Send,
   Sparkles,
   Loader2,
   CheckCircle2,
+  AlertCircle,
   Plus,
   MessageSquare,
   ChevronDown,
@@ -72,9 +74,11 @@ export function ChatPanel() {
   const diagramId = useDiagramStore((s) => s.diagram?.id ?? "");
   const selectedNodeIds = useDiagramStore((s) => s.selectedNodeIds);
   const selectedEdgeIds = useDiagramStore((s) => s.selectedEdgeIds);
+  const aiSettings = useAISettingsStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showDone, setShowDone] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [sendMode, setSendMode] = useState<"cmd_enter" | "enter">("cmd_enter");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -168,6 +172,8 @@ export function ChatPanel() {
         diagramId,
         selectedNodeIds: selectedNodeIds.length > 0 ? selectedNodeIds : undefined,
         selectedEdgeIds: selectedEdgeIds.length > 0 ? selectedEdgeIds : undefined,
+        maxSteps: aiSettings.maxSteps,
+        model: aiSettings.model,
       },
       onToolCall: async ({ toolCall }) => {
         pendingToolCalls++;
@@ -186,6 +192,7 @@ export function ChatPanel() {
         }
         finishFired = false;
         pendingToolCalls = 0;
+        setChatError(null);
         useDiagramStore.getState().beginBatch();
         useDiagramStore.getState().setSyncState("ai-streaming");
       },
@@ -197,9 +204,11 @@ export function ChatPanel() {
         // Refresh session list after a chat completes
         loadSessions();
       },
-      onError: () => {
+      onError: (error) => {
         useDiagramStore.getState().endBatch();
         useDiagramStore.getState().setSyncState("idle");
+        setChatError(error.message || "AI response was interrupted. Try again.");
+        console.error("[AI Chat Error]", error);
         finishFired = false;
         pendingToolCalls = 0;
       },
@@ -347,23 +356,43 @@ export function ChatPanel() {
           </div>
         )}
         {messages.map((m) => {
-          if (m.role === "user" || m.role === "assistant") {
-            const textContent =
-              typeof m.content === "string"
-                ? m.content
-                : "";
+          if (m.role === "user") {
+            return (
+              <ChatMessage
+                key={m.id}
+                role="user"
+                content={typeof m.content === "string" ? m.content : ""}
+              />
+            );
+          }
+          if (m.role === "assistant") {
+            // Use parts array (recommended by AI SDK v4) to avoid
+            // truncation when content is empty during tool-call-only steps
+            const textParts = m.parts
+              ?.filter(
+                (p): p is { type: "text"; text: string } => p.type === "text"
+              )
+              .map((p) => p.text)
+              .join("");
+            const textContent = textParts || (typeof m.content === "string" ? m.content : "");
+            const hasToolCalls = m.parts?.some(
+              (p) => p.type === "tool-invocation"
+            );
 
-            if (!textContent) return null;
+            // Skip messages with no text and no tool activity
+            if (!textContent && !hasToolCalls) return null;
 
             return (
               <ChatMessage
                 key={m.id}
-                role={m.role}
-                content={textContent}
+                role="assistant"
+                content={
+                  textContent ||
+                  (hasToolCalls ? "*(modifying diagram...)*" : "")
+                }
                 isStreaming={
                   isLoading &&
-                  m.id === messages[messages.length - 1]?.id &&
-                  m.role === "assistant"
+                  m.id === messages[messages.length - 1]?.id
                 }
               />
             );
@@ -388,6 +417,12 @@ export function ChatPanel() {
           <div className="flex items-center gap-2 px-4 py-2 text-xs text-green-500">
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Done</span>
+          </div>
+        )}
+        {chatError && (
+          <div className="flex items-center gap-2 px-4 py-2 text-xs text-red-500 bg-red-500/10 rounded-md mx-3">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span>{chatError}</span>
           </div>
         )}
       </div>
