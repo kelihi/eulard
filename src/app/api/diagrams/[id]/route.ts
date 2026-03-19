@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getDiagram, updateDiagram, deleteDiagram, canAccessDiagram } from "@/lib/db";
-import { getRequiredUser } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
 export async function GET(
@@ -9,15 +9,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const log = logger.apiRequest("GET", `/api/diagrams/${id}`);
+  const requestId = _request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("GET", `/api/diagrams/${id}`, { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(_request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const access = await canAccessDiagram(id, user.id);
+    const access = await canAccessDiagram(id, user.id, user.email);
 
     if (!access.access) {
       log.done(404, "not found or no access", { userId: user.id });
@@ -37,7 +38,9 @@ const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   code: z.string().max(50000).optional(),
   positions: z.string().max(100000).nullable().optional(),
+  styleOverrides: z.string().max(100000).nullable().optional(),
   folderId: z.string().nullable().optional(),
+  orgShared: z.enum(["view", "edit"]).nullable().optional(),
 });
 
 export async function PUT(
@@ -45,15 +48,16 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const log = logger.apiRequest("PUT", `/api/diagrams/${id}`);
+  const requestId = request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("PUT", `/api/diagrams/${id}`, { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const access = await canAccessDiagram(id, user.id);
+    const access = await canAccessDiagram(id, user.id, user.email);
 
     if (!access.access) {
       log.done(404, "not found or no access", { userId: user.id });
@@ -73,6 +77,12 @@ export async function PUT(
       return NextResponse.json({ error: parsed.error.message }, { status: 400 });
     }
 
+    // Only owner can change org sharing
+    if (parsed.data.orgShared !== undefined && access.permission !== "owner") {
+      log.done(403, "only owner can change org sharing", { userId: user.id });
+      return NextResponse.json({ error: "Only the owner can change organization sharing" }, { status: 403 });
+    }
+
     const diagram = await updateDiagram(id, parsed.data);
     log.done(200, "updated diagram", { userId: user.id });
     return NextResponse.json(diagram);
@@ -87,9 +97,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const log = logger.apiRequest("DELETE", `/api/diagrams/${id}`);
+  const requestId = _request.headers.get("x-request-id") ?? undefined;
+  const log = logger.apiRequest("DELETE", `/api/diagrams/${id}`, { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(_request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,0 +1,35 @@
+steps:
+  # Build the container image with dev-specific and latest tags
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:${_TAG}'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:latest'
+      - '.'
+    id: 'build'
+
+  # Update Cloud Run dev service with the new image
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'services'
+      - 'update'
+      - 'eulard-dev'
+      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:${_TAG}'
+      - '--region=us-central1'
+      - '--project=$PROJECT_ID'
+    id: 'deploy'
+    waitFor: ['build']
+
+substitutions:
+  _TAG: 'latest'
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:${_TAG}'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

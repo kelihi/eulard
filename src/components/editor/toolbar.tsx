@@ -28,7 +28,7 @@ export function Toolbar() {
           break;
       }
     } catch (err) {
-      console.error("Export failed:", err);
+      console.error("Export failed:", err instanceof Error ? err.message : String(err));
     }
     setExporting(false);
   };

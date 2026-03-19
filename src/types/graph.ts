@@ -41,3 +41,29 @@ export interface FlowchartGraph {
 }
 
 export type DiagramGraph = FlowchartGraph;
+
+/** Style properties that can be applied to nodes */
+export interface NodeStyleOverride {
+  fontFamily?: string;
+  fontSize?: number;
+  fontColor?: string;
+  backgroundColor?: string;
+  borderColor?: string;
+}
+
+/** Style properties that can be applied to edges */
+export interface EdgeStyleOverride {
+  lineThickness?: number;
+  lineColor?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  fontColor?: string;
+}
+
+/** Global + per-object style overrides for a diagram */
+export interface DiagramStyles {
+  globalNode?: NodeStyleOverride;
+  globalEdge?: EdgeStyleOverride;
+  nodes?: Record<string, NodeStyleOverride>;
+  edges?: Record<string, EdgeStyleOverride>;
+}

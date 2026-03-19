@@ -1,71 +1,69 @@
-type LogLevel = "info" | "warn" | "error";
+type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
+
+const LOG_LEVEL_ORDER: Record<LogLevel, number> = {
+  trace: 0,
+  debug: 1,
+  info: 2,
+  warn: 3,
+  error: 4,
+};
+
+const currentLevel: LogLevel =
+  LOG_LEVEL_ORDER[process.env.LOG_LEVEL as LogLevel] !== undefined
+    ? (process.env.LOG_LEVEL as LogLevel)
+    : "info";
+
+function shouldLog(level: LogLevel): boolean {
+  return LOG_LEVEL_ORDER[level] >= LOG_LEVEL_ORDER[currentLevel];
+}
 
 interface LogEntry {
-  level: LogLevel;
+  severity: string;
   timestamp: string;
+  message: string;
   method?: string;
   path?: string;
   userId?: string;
-  message: string;
+  requestId?: string;
   durationMs?: number;
   statusCode?: number;
   error?: string;
   [key: string]: unknown;
 }
 
-function formatLog(entry: LogEntry): string {
-  const parts = [
-    `[${entry.timestamp}]`,
-    entry.level.toUpperCase(),
-    entry.method && entry.path ? `${entry.method} ${entry.path}` : "",
-    entry.userId ? `user=${entry.userId}` : "",
-    entry.message,
-    entry.statusCode ? `status=${entry.statusCode}` : "",
-    entry.durationMs !== undefined ? `${entry.durationMs}ms` : "",
-    entry.error ? `error="${entry.error}"` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  return parts;
-}
+type LogExtra = Partial<Omit<LogEntry, "severity" | "timestamp" | "message">>;
 
-function log(level: LogLevel, message: string, extra?: Partial<LogEntry>) {
+function log(level: LogLevel, message: string, extra?: LogExtra) {
+  if (!shouldLog(level)) return;
+
   const entry: LogEntry = {
-    level,
+    severity: level.toUpperCase(),
     timestamp: new Date().toISOString(),
     message,
     ...extra,
   };
 
-  const formatted = formatLog(entry);
-
-  switch (level) {
-    case "error":
-      console.error(formatted);
-      break;
-    case "warn":
-      console.warn(formatted);
-      break;
-    default:
-      console.log(formatted);
-  }
+  // Use console.log for all levels — Cloud Logging parses severity from JSON
+  console.log(JSON.stringify(entry));
 }
 
 export const logger = {
-  info: (message: string, extra?: Partial<LogEntry>) => log("info", message, extra),
-  warn: (message: string, extra?: Partial<LogEntry>) => log("warn", message, extra),
-  error: (message: string, extra?: Partial<LogEntry>) => log("error", message, extra),
+  trace: (message: string, extra?: LogExtra) => log("trace", message, extra),
+  debug: (message: string, extra?: LogExtra) => log("debug", message, extra),
+  info: (message: string, extra?: LogExtra) => log("info", message, extra),
+  warn: (message: string, extra?: LogExtra) => log("warn", message, extra),
+  error: (message: string, extra?: LogExtra) => log("error", message, extra),
 
-  /** Log an API request start + end. Returns a function to call when done. */
-  apiRequest(method: string, path: string, extra?: Partial<LogEntry>) {
+  /** Log an API request start + end. Returns helpers to call when done. */
+  apiRequest(method: string, path: string, extra?: LogExtra) {
     const start = Date.now();
     log("info", "request", { method, path, ...extra });
     return {
-      done(statusCode: number, message?: string, moreExtra?: Partial<LogEntry>) {
+      done(statusCode: number, message?: string, moreExtra?: LogExtra) {
         const durationMs = Date.now() - start;
-        log("info", message || "response", { method, path, statusCode, durationMs, ...moreExtra });
+        log("info", message || "response", { method, path, statusCode, durationMs, ...extra, ...moreExtra });
       },
-      fail(error: unknown, moreExtra?: Partial<LogEntry>) {
+      fail(error: unknown, moreExtra?: LogExtra) {
         const durationMs = Date.now() - start;
         const errorMsg = error instanceof Error ? error.message : String(error);
         log("error", "request failed", {
@@ -73,6 +71,7 @@ export const logger = {
           path,
           durationMs,
           error: errorMsg,
+          ...extra,
           ...moreExtra,
         });
       },
