@@ -355,6 +355,16 @@ export async function transferFolderOwnership(folderId: string, newOwnerId: stri
     "UPDATE folders SET user_id = $1, updated_at = NOW() WHERE id = $2",
     [newOwnerId, folderId]
   );
+  // Transfer ownership of diagrams inside the folder to the new owner
+  await query(
+    "UPDATE diagrams SET user_id = $1 WHERE folder_id = $2",
+    [newOwnerId, folderId]
+  );
+  // Remove stale folder_shares entry for the new owner (they're now the owner)
+  await query(
+    "DELETE FROM folder_shares WHERE folder_id = $1 AND shared_with_user_id = $2",
+    [folderId, newOwnerId]
+  );
 }
 
 // --- Diagrams ---
