@@ -77,8 +77,13 @@ When a user describes a process (e.g., "supply chain", "onboarding flow", "CI/CD
 /**
  * Build the final system prompt by injecting the current diagram context.
  * If a custom prompt template is provided (from admin settings), use that instead of the default.
+ * Optionally accepts user-provided context that gets appended to the system prompt.
  */
-export function buildSystemPrompt(currentCode: string, customPromptTemplate?: string | null): string {
+export function buildSystemPrompt(
+  currentCode: string,
+  customPromptTemplate?: string | null,
+  userContext?: string | null,
+): string {
   const graph = mermaidToGraph(currentCode);
 
   let graphContext = "";
@@ -93,7 +98,18 @@ Edges: ${graph.edges.map((e) => `${e.source}→${e.target}${e.label ? `[${e.labe
 
   const template = customPromptTemplate || getDefaultSystemPrompt();
 
-  return template
+  let prompt = template
     .replace("{{CURRENT_CODE}}", () => currentCode)
     .replace("{{GRAPH_CONTEXT}}", () => graphContext);
+
+  if (userContext && userContext.trim()) {
+    prompt += `
+
+## User-Provided Context
+The user has provided the following context, requirements, or reference material. Use this information to inform your diagram creation and modifications:
+
+${userContext.trim()}`;
+  }
+
+  return prompt;
 }

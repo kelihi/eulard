@@ -35,6 +35,10 @@ import {
   MessageSquare,
   ChevronDown,
   Trash2,
+  FileText,
+  ChevronUp,
+  X,
+  Pencil,
 } from "lucide-react";
 
 interface ChatSession {
@@ -77,6 +81,11 @@ export function ChatPanel() {
   const sessionListRef = useRef<HTMLDivElement>(null);
   const autoLoadedRef = useRef(false);
 
+  // Context panel state
+  const [userContext, setUserContext] = useState("");
+  const [contextExpanded, setContextExpanded] = useState(false);
+  const contextTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   // Load sessions for current diagram
   const loadSessions = useCallback(async () => {
     if (!diagramId) return;
@@ -111,7 +120,7 @@ export function ChatPanel() {
   const { messages, input, handleInputChange, handleSubmit, status, setMessages } =
     useChat({
       api: "/api/ai/chat",
-      body: { currentCode: code, sessionId, diagramId },
+      body: { currentCode: code, sessionId, diagramId, userContext: userContext.trim() || undefined },
       onToolCall: async ({ toolCall }) => {
         pendingToolCalls++;
         try {
@@ -335,28 +344,144 @@ export function ChatPanel() {
         )}
       </div>
 
-      {/* Input */}
-      <form
-        onSubmit={handleSubmit}
-        className="p-3 border-t border-[var(--border)] shrink-0"
-      >
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={handleInputChange}
-            placeholder="Describe your diagram..."
-            disabled={isLoading}
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </div>
-      </form>
+      {/* Context panel + Input */}
+      <div className="border-t border-[var(--border)] shrink-0">
+        {/* Context toggle bar */}
+        <button
+          type="button"
+          onClick={() => {
+            setContextExpanded(!contextExpanded);
+            if (!contextExpanded) {
+              setTimeout(() => contextTextareaRef.current?.focus(), 50);
+            }
+          }}
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--accent)] transition-colors"
+        >
+          <FileText className="w-3.5 h-3.5 text-[var(--muted-foreground)]" />
+          <span className="text-[var(--muted-foreground)]">
+            {userContext.trim()
+              ? `Context attached (${userContext.trim().split("\n").length} lines)`
+              : "Add context"}
+          </span>
+          {userContext.trim() && (
+            <span className="ml-auto flex items-center gap-1">
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setUserContext("");
+                  setContextExpanded(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    setUserContext("");
+                    setContextExpanded(false);
+                  }
+                }}
+                className="p-0.5 rounded hover:bg-[var(--muted)] transition-colors"
+                title="Remove context"
+              >
+                <X className="w-3 h-3 text-[var(--muted-foreground)] hover:text-red-500" />
+              </span>
+            </span>
+          )}
+          {!userContext.trim() && (
+            <span className="ml-auto">
+              {contextExpanded ? (
+                <ChevronDown className="w-3 h-3 text-[var(--muted-foreground)]" />
+              ) : (
+                <ChevronUp className="w-3 h-3 text-[var(--muted-foreground)]" />
+              )}
+            </span>
+          )}
+        </button>
+
+        {/* Collapsible context textarea */}
+        {contextExpanded && (
+          <div className="px-3 pb-2">
+            <div className="relative">
+              <textarea
+                ref={contextTextareaRef}
+                value={userContext}
+                onChange={(e) => setUserContext(e.target.value)}
+                placeholder="Paste requirements, specifications, existing code, or any reference material here. This context will be provided to the AI alongside your messages."
+                className="w-full h-32 px-3 py-2 text-xs font-mono rounded-lg border border-[var(--border)] bg-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent resize-y min-h-[80px] max-h-[300px]"
+              />
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px] text-[var(--muted-foreground)]">
+                  {userContext.trim()
+                    ? `${userContext.trim().length.toLocaleString()} chars`
+                    : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setContextExpanded(false)}
+                  className="text-[10px] text-[var(--primary)] hover:underline"
+                >
+                  {userContext.trim() ? "Done" : "Close"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Context badge (collapsed summary) */}
+        {!contextExpanded && userContext.trim() && (
+          <div className="px-3 pb-1">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--primary)]/10 border border-[var(--primary)]/20">
+              <FileText className="w-3 h-3 text-[var(--primary)] shrink-0" />
+              <span className="text-[10px] text-[var(--primary)] truncate flex-1">
+                {userContext.trim().split("\n")[0].substring(0, 60)}
+                {userContext.trim().split("\n")[0].length > 60 ? "..." : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setContextExpanded(true);
+                  setTimeout(() => contextTextareaRef.current?.focus(), 50);
+                }}
+                className="p-0.5 rounded hover:bg-[var(--primary)]/20 transition-colors"
+                title="Edit context"
+              >
+                <Pencil className="w-2.5 h-2.5 text-[var(--primary)]" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setUserContext("")}
+                className="p-0.5 rounded hover:bg-[var(--primary)]/20 transition-colors"
+                title="Remove context"
+              >
+                <X className="w-2.5 h-2.5 text-[var(--primary)]" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Chat input */}
+        <form
+          onSubmit={handleSubmit}
+          className="p-3 pt-1.5"
+        >
+          <div className="flex gap-2">
+            <input
+              value={input}
+              onChange={handleInputChange}
+              placeholder="Describe your diagram..."
+              disabled={isLoading}
+              className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
