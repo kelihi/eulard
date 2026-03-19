@@ -1,0 +1,53 @@
+name: Deploy to Dev (Cloud Run)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Build & Deploy to Cloud Run Dev
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.CI_CD_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and deploy via Cloud Build
+        run: |
+          TAG="dev-${GITHUB_SHA::7}"
+          BUILD_ID=$(gcloud builds submit \
+            --config=cloudbuild-dev.yaml \
+            --substitutions=_TAG=${TAG} \
+            --project=kelihi-ai-platform \
+            --async --format='value(id)' .)
+          echo "Build submitted: $BUILD_ID (tag: $TAG)"
+          while true; do
+            STATUS=$(gcloud builds describe $BUILD_ID --project=kelihi-ai-platform --format='value(status)')
+            echo "Build status: $STATUS"
+            if [ "$STATUS" = "SUCCESS" ]; then break; fi
+            if [ "$STATUS" = "FAILURE" ] || [ "$STATUS" = "CANCELLED" ] || [ "$STATUS" = "TIMEOUT" ]; then
+              echo "Build failed with status: $STATUS"
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Show service URL
+        run: |
+          URL=$(gcloud run services describe eulard-dev \
+            --project=kelihi-ai-platform \
+            --region=us-central1 \
+            --format='value(status.url)')
+          echo "Deployed to: ${URL}"
+          echo "Health check: ${URL}/api/healthz"

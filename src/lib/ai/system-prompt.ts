@@ -1,4 +1,5 @@
 import { mermaidToGraph } from "@/lib/parser/mermaid-to-graph";
+import { isConfigured as isFeedbackSystemConfigured } from "@/lib/feedback-system";
 
 /**
  * Returns the default system prompt template (without diagram context injected).
@@ -6,6 +7,24 @@ import { mermaidToGraph } from "@/lib/parser/mermaid-to-graph";
  * Exposed in the admin panel so admins can view and override it.
  */
 export function getDefaultSystemPrompt(): string {
+  const clientContextSection = isFeedbackSystemConfigured()
+    ? `
+
+### Client Context (Feedback System Integration)
+- **listClients**: Search and list clients from the feedback system. Returns client names, IDs, and integration details.
+- **getClientContext**: Fetch full details for a specific client, including team members, tools, domains, and integration links (ClickUp folder, Notion page, Slack channels).
+
+Use these tools when the user mentions a client name, asks about client projects, or wants to create a diagram based on client data.
+When a user asks to diagram a client's architecture, workflow, or team structure, first use listClients to find the client, then getClientContext to retrieve the full details, and then build the diagram using that context.
+Client data includes:
+- **ClickUp folder ID**: Links to the client's project management folder
+- **Notion page URL**: Links to the client's documentation
+- **Slack channels**: Internal and external communication channels
+- **Team members**: People assigned to the client
+- **Tools & domains**: Technologies and domains the client works with
+- **Source systems**: Data sources the client uses`
+    : "";
+
   return `You are Eulard AI, an expert assistant for creating and modifying mermaid diagrams.
 
 You help users create, edit, and improve mermaid diagrams through natural language conversation.
@@ -57,6 +76,7 @@ When a user describes a process (e.g., "supply chain", "onboarding flow", "CI/CD
 
 ### Export
 - **exportDiagram**: Export as PNG, SVG, or mermaid code file.
+${clientContextSection}
 
 ## Instructions
 - IMPORTANT: Execute ALL tool calls needed to fulfill the user's request in a SINGLE response. Do NOT stop after just updating metadata — build the complete diagram immediately.
@@ -77,8 +97,15 @@ When a user describes a process (e.g., "supply chain", "onboarding flow", "CI/CD
 /**
  * Build the final system prompt by injecting the current diagram context.
  * If a custom prompt template is provided (from admin settings), use that instead of the default.
+ * Optionally appends pre-loaded folder client context.
  */
-export function buildSystemPrompt(currentCode: string, customPromptTemplate?: string | null): string {
+export function buildSystemPrompt(
+  currentCode: string,
+  customPromptTemplate?: string | null,
+  folderClientContext?: string | null,
+  selectedNodeIds?: string[] | null,
+  selectedEdgeIds?: string[] | null,
+): string {
   const graph = mermaidToGraph(currentCode);
 
   let graphContext = "";
@@ -91,9 +118,37 @@ Edges: ${graph.edges.map((e) => `${e.source}→${e.target}${e.label ? `[${e.labe
 `;
   }
 
+  let selectionContext = "";
+  const hasSelectedNodes = selectedNodeIds && selectedNodeIds.length > 0;
+  const hasSelectedEdges = selectedEdgeIds && selectedEdgeIds.length > 0;
+  if (hasSelectedNodes || hasSelectedEdges) {
+    selectionContext = "\n## Active Selection\n";
+    selectionContext += "The user has selected specific elements on the canvas. You MUST only modify the selected elements listed below. Do NOT add, remove, or modify any other nodes or edges that are not in the selection.\n";
+    if (hasSelectedNodes) {
+      selectionContext += `Selected nodes: ${selectedNodeIds.join(", ")}\n`;
+    }
+    if (hasSelectedEdges) {
+      selectionContext += `Selected edges: ${selectedEdgeIds.join(", ")}\n`;
+    }
+    selectionContext += "\nWhen the user asks to make changes, apply them ONLY to these selected elements. If the user's request would require modifying unselected elements, explain that those elements are not selected and ask the user to select them first or clear the selection.\n";
+  }
+
   const template = customPromptTemplate || getDefaultSystemPrompt();
 
-  return template
+  let prompt = template
     .replace("{{CURRENT_CODE}}", () => currentCode)
-    .replace("{{GRAPH_CONTEXT}}", () => graphContext);
+    .replace("{{GRAPH_CONTEXT}}", () => graphContext + selectionContext);
+
+  if (folderClientContext) {
+    prompt += `
+
+## Active Client Context
+This folder is bound to a specific client. The client's data has been pre-loaded for you:
+
+${folderClientContext}
+
+Use this client context automatically when building or modifying diagrams. You do not need to call getClientContext for this client — the data is already available above. You may still use listClients/getClientContext to look up other clients if needed.`;
+  }
+
+  return prompt;
 }

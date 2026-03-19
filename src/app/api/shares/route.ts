@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getRequiredUser } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
 import {
   getDiagram,
   getUserByEmail,
+  createUser,
   listDiagramShares,
   shareDiagram,
   removeDiagramShare,
 } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { randomBytes } from "crypto";
 
 const shareSchema = z.object({
   diagramId: z.string(),
@@ -21,7 +23,7 @@ export async function GET(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("GET", "/api/shares", { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -43,7 +45,7 @@ export async function GET(request: Request) {
 
     const shares = await listDiagramShares(diagramId);
     log.done(200, `listed ${shares.length} shares`, { userId: user.id });
-    return NextResponse.json(shares);
+    return NextResponse.json({ shares, orgShared: diagram.orgShared ?? null });
   } catch (err) {
     log.fail(err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("POST", "/api/shares", { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -74,10 +76,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not found or not owner" }, { status: 404 });
     }
 
-    const targetUser = await getUserByEmail(parsed.data.email);
+    const email = parsed.data.email.toLowerCase().trim();
+    let targetUser = await getUserByEmail(email);
+    let invited = false;
+    let guestPassword: string | null = null;
+
+    // Invite-on-share: auto-create user if not found
     if (!targetUser) {
-      log.done(404, "target user not found", { userId: user.id });
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      const orgDomains = (process.env.AUTH_GOOGLE_ALLOWED_DOMAINS || "").split(",").map(d => d.trim()).filter(Boolean);
+      const emailDomain = email.split("@")[1];
+      const isOrgEmail = orgDomains.includes(emailDomain);
+
+      if (isOrgEmail) {
+        // Org user — pre-create with Google OAuth placeholder (they'll sign in via Google)
+        await createUser(generateId(), email, email.split("@")[0], "GOOGLE_OAUTH_USER", "user");
+      } else {
+        // Guest user — create with random password
+        guestPassword = randomBytes(6).toString("base64url");
+        const { hash } = await import("bcryptjs");
+        const passwordHash = await hash(guestPassword, 12);
+        await createUser(generateId(), email, email.split("@")[0], passwordHash, "user");
+      }
+      targetUser = await getUserByEmail(email);
+      invited = true;
+    }
+
+    if (!targetUser) {
+      log.done(500, "failed to create invited user", { userId: user.id });
+      return NextResponse.json({ error: "Failed to invite user" }, { status: 500 });
     }
 
     if (targetUser.id === user.id) {
@@ -93,8 +119,11 @@ export async function POST(request: Request) {
     );
 
     const shares = await listDiagramShares(parsed.data.diagramId);
-    log.done(201, "shared diagram", { userId: user.id });
-    return NextResponse.json(shares, { status: 201 });
+    log.done(201, invited ? `invited and shared with ${email}` : `shared with ${email}`, { userId: user.id });
+    return NextResponse.json(
+      { shares, invited, guestPassword },
+      { status: 201 }
+    );
   } catch (err) {
     log.fail(err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -110,7 +139,7 @@ export async function DELETE(request: Request) {
   const requestId = request.headers.get("x-request-id") ?? undefined;
   const log = logger.apiRequest("DELETE", "/api/shares", { requestId });
   try {
-    const user = await getRequiredUser();
+    const user = await authenticateRequest(request);
     if (!user) {
       log.done(401, "unauthorized");
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

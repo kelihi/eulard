@@ -14,12 +14,17 @@ import {
   Pencil,
   ChevronRight,
   Users,
+  Building2,
+  Share2,
 } from "lucide-react";
+import { ClientPicker } from "./client-picker";
+import { FolderShareModal } from "@/components/layout/folder-share-modal";
 
 export function Sidebar() {
   const diagrams = useDiagramStore((s) => s.diagrams);
   const folders = useDiagramStore((s) => s.folders);
   const currentId = useDiagramStore((s) => s.diagram?.id);
+  const sharedFolders = useDiagramStore((s) => s.sharedFolders);
   const loadDiagrams = useDiagramStore((s) => s.loadDiagrams);
   const loadFolders = useDiagramStore((s) => s.loadFolders);
   const createDiagram = useDiagramStore((s) => s.createDiagram);
@@ -36,6 +41,9 @@ export function Sidebar() {
   const editInputRef = useRef<HTMLInputElement>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const [sharedExpanded, setSharedExpanded] = useState(true);
+  const [clientPickerFolderId, setClientPickerFolderId] = useState<string | null>(null);
+  const [sharedFoldersExpanded, setSharedFoldersExpanded] = useState(true);
+  const [shareFolderModal, setShareFolderModal] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     loadDiagrams();
@@ -121,7 +129,11 @@ export function Sidebar() {
 
   // Separate owned vs shared diagrams
   const ownedDiagrams = diagrams.filter((d) => !d.isShared);
-  const sharedDiagrams = diagrams.filter((d) => d.isShared);
+  // Shared diagrams that belong to a shared folder are shown under "Shared Folders", not "Shared with me"
+  const sharedFolderIds = new Set(sharedFolders.map((f) => f.id));
+  const sharedDiagrams = diagrams.filter(
+    (d) => d.isShared && (!d.folderId || !sharedFolderIds.has(d.folderId))
+  );
   const uncategorized = ownedDiagrams.filter((d) => !d.folderId);
   const diagramsByFolder = (folderId: string) =>
     ownedDiagrams.filter((d) => d.folderId === folderId);
@@ -190,7 +202,7 @@ export function Sidebar() {
           const isDragOver = dragOverFolderId === folder.id;
 
           return (
-            <div key={folder.id}>
+            <div key={folder.id} className="relative">
               <div
                 onClick={() => toggleFolder(folder.id)}
                 onDragOver={(e) => handleDragOver(e, folder.id)}
@@ -248,6 +260,16 @@ export function Sidebar() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      setShareFolderModal({ id: folder.id, name: folder.name });
+                    }}
+                    className="p-0.5 rounded hover:bg-[var(--border)]"
+                    title="Share folder"
+                  >
+                    <Share2 className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setEditingFolderId(folder.id);
                       setEditingName(folder.name);
                     }}
@@ -257,6 +279,21 @@ export function Sidebar() {
                     <Pencil className="w-3 h-3" />
                   </button>
                   <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setClientPickerFolderId(
+                        clientPickerFolderId === folder.id ? null : folder.id
+                      );
+                    }}
+                    className={cn(
+                      "p-0.5 rounded hover:bg-[var(--border)]",
+                      folder.clientId && "opacity-100 text-[var(--primary)]"
+                    )}
+                    title={folder.clientId ? "Change client" : "Set client context"}
+                  >
+                    <Building2 className="w-3 h-3" />
+                  </button>
+                  <button
                     onClick={(e) => handleDeleteFolder(e, folder.id)}
                     className="p-0.5 rounded hover:bg-[var(--destructive)]/10 hover:text-[var(--destructive)]"
                     title="Delete folder"
@@ -264,6 +301,13 @@ export function Sidebar() {
                     <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
+                {clientPickerFolderId === folder.id && (
+                  <ClientPicker
+                    folderId={folder.id}
+                    currentClientId={folder.clientId}
+                    onClose={() => setClientPickerFolderId(null)}
+                  />
+                )}
               </div>
 
               {isExpanded && (
@@ -312,7 +356,88 @@ export function Sidebar() {
           </p>
         )}
 
-        {/* Shared with me section */}
+        {/* Shared folders section */}
+        {sharedFolders.length > 0 && (
+          <div className="pt-2 mt-2 border-t border-[var(--border)]">
+            <div
+              onClick={() => setSharedFoldersExpanded(!sharedFoldersExpanded)}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer text-sm hover:bg-[var(--background)]/50"
+            >
+              <ChevronRight
+                className={cn(
+                  "w-3 h-3 text-[var(--muted-foreground)] transition-transform shrink-0",
+                  sharedFoldersExpanded && "rotate-90"
+                )}
+              />
+              <Users className="w-3.5 h-3.5 text-[var(--muted-foreground)] shrink-0" />
+              <span className="text-xs font-medium text-[var(--muted-foreground)]">
+                Shared Folders
+              </span>
+              <span className="text-xs text-[var(--muted-foreground)] ml-auto">
+                {sharedFolders.length}
+              </span>
+            </div>
+            {sharedFoldersExpanded && (
+              <div className="ml-4 mt-0.5 space-y-1">
+                {sharedFolders.map((folder) => {
+                  const isExpanded = expandedFolders.has(`shared-${folder.id}`);
+                  const folderDiagrams = diagrams.filter(
+                    (d) => d.isShared && d.folderId === folder.id
+                  );
+
+                  return (
+                    <div key={folder.id}>
+                      <div
+                        onClick={() => {
+                          setExpandedFolders((prev) => {
+                            const next = new Set(prev);
+                            const key = `shared-${folder.id}`;
+                            if (next.has(key)) next.delete(key);
+                            else next.add(key);
+                            return next;
+                          });
+                        }}
+                        className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg cursor-pointer text-sm hover:bg-[var(--background)]/50"
+                      >
+                        <ChevronRight
+                          className={cn(
+                            "w-3 h-3 text-[var(--muted-foreground)] transition-transform shrink-0",
+                            isExpanded && "rotate-90"
+                          )}
+                        />
+                        {isExpanded ? (
+                          <FolderOpen className="w-3.5 h-3.5 text-[var(--primary)] shrink-0" />
+                        ) : (
+                          <FolderClosed className="w-3.5 h-3.5 text-[var(--muted-foreground)] shrink-0" />
+                        )}
+                        <span className="truncate flex-1">{folder.name}</span>
+                        <span className="text-[10px] text-[var(--muted-foreground)] px-1 py-0.5 bg-[var(--muted)] rounded">
+                          {folder.permission}
+                        </span>
+                        <span className="text-xs text-[var(--muted-foreground)]">
+                          {folderDiagrams.length}
+                        </span>
+                      </div>
+                      {isExpanded && (
+                        <div className="ml-4 mt-0.5 space-y-0.5">
+                          {folderDiagrams.length === 0 ? (
+                            <p className="text-xs text-[var(--muted-foreground)] px-3 py-1">
+                              No diagrams
+                            </p>
+                          ) : (
+                            folderDiagrams.map((d) => renderDiagram(d, true))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Shared with me section (individual diagrams) */}
         {sharedDiagrams.length > 0 && (
           <div className="pt-2 mt-2 border-t border-[var(--border)]">
             <div
@@ -341,6 +466,15 @@ export function Sidebar() {
           </div>
         )}
       </div>
+      {shareFolderModal && (
+        <FolderShareModal
+          open={true}
+          onClose={() => setShareFolderModal(null)}
+          folderId={shareFolderModal.id}
+          folderName={shareFolderModal.name}
+          isOwner={true}
+        />
+      )}
     </div>
   );
 }
