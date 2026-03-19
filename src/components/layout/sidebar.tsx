@@ -126,7 +126,11 @@ export function Sidebar() {
 
   // Separate owned vs shared diagrams
   const ownedDiagrams = diagrams.filter((d) => !d.isShared);
-  const sharedDiagrams = diagrams.filter((d) => d.isShared);
+  // Shared diagrams that belong to a shared folder are shown under "Shared Folders", not "Shared with me"
+  const sharedFolderIds = new Set(sharedFolders.map((f) => f.id));
+  const sharedDiagrams = diagrams.filter(
+    (d) => d.isShared && (!d.folderId || !sharedFolderIds.has(d.folderId))
+  );
   const uncategorized = ownedDiagrams.filter((d) => !d.folderId);
   const diagramsByFolder = (folderId: string) =>
     ownedDiagrams.filter((d) => d.folderId === folderId);

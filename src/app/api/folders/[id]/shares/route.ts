@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authenticateRequest } from "@/lib/auth";
 import {
   getFolder,
+  getUserById,
   getUserByEmail,
   createUser,
   listFolderShares,
@@ -212,6 +213,12 @@ export async function PUT(
     if (parsed.data.newOwnerId === user.id) {
       log.done(400, "already the owner", { userId: user.id });
       return NextResponse.json({ error: "You are already the owner" }, { status: 400 });
+    }
+
+    const newOwner = await getUserById(parsed.data.newOwnerId);
+    if (!newOwner) {
+      log.done(400, "new owner not found", { userId: user.id });
+      return NextResponse.json({ error: "Target user not found" }, { status: 400 });
     }
 
     await transferFolderOwnership(folderId, parsed.data.newOwnerId);
