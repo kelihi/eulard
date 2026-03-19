@@ -82,5 +82,6 @@ export const config = {
     "/api/api-keys/:path*",
     "/api/me",
     "/api/users/:path*",
+    "/api/user-preferences",
   ],
 };

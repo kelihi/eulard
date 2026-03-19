@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Key, Check, Trash2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Key, Check, Trash2, Keyboard } from "lucide-react";
+import { formatShortcut } from "@/hooks/use-keyboard-shortcuts";
 
 interface SettingsModalProps {
   open: boolean;
   onClose: () => void;
 }
+
+const DEFAULT_SIDEBAR_SHORTCUT = "mod+b";
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [apiKey, setApiKey] = useState("");
@@ -14,6 +17,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [keyPreview, setKeyPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Sidebar shortcut state
+  const [sidebarShortcut, setSidebarShortcut] = useState(DEFAULT_SIDEBAR_SHORTCUT);
+  const [isRecording, setIsRecording] = useState(false);
+  const [shortcutSaving, setShortcutSaving] = useState(false);
+  const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
+  const recordingRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -23,10 +33,83 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           setHasKey(data.hasApiKey);
           setKeyPreview(data.apiKeyPreview);
         });
+      // Load user preferences for shortcut
+      fetch("/api/user-preferences")
+        .then((r) => {
+          if (!r.ok) return null;
+          return r.json();
+        })
+        .then((data) => {
+          if (data?.sidebarToggleShortcut) {
+            setSidebarShortcut(data.sidebarToggleShortcut);
+          }
+        })
+        .catch(() => {});
       setApiKey("");
       setMessage(null);
+      setShortcutMessage(null);
+      setIsRecording(false);
     }
   }, [open]);
+
+  // Handle keyboard recording for shortcut customization
+  useEffect(() => {
+    if (!isRecording) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Ignore standalone modifier keys
+      if (["Control", "Meta", "Shift", "Alt"].includes(e.key)) return;
+
+      const parts: string[] = [];
+      if (e.metaKey || e.ctrlKey) parts.push("mod");
+      if (e.shiftKey) parts.push("shift");
+      if (e.altKey) parts.push("alt");
+
+      // Need at least one modifier
+      if (parts.length === 0) {
+        setShortcutMessage("Shortcut must include a modifier key (Ctrl/Cmd, Shift, or Alt).");
+        setIsRecording(false);
+        return;
+      }
+
+      parts.push(e.key.toLowerCase());
+      const newShortcut = parts.join("+");
+      setSidebarShortcut(newShortcut);
+      setIsRecording(false);
+      saveShortcut(newShortcut);
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [isRecording]);
+
+  const saveShortcut = async (shortcut: string) => {
+    setShortcutSaving(true);
+    setShortcutMessage(null);
+    try {
+      await fetch("/api/user-preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sidebarToggleShortcut: shortcut }),
+      });
+      setShortcutMessage("Shortcut saved.");
+      // Notify the keyboard shortcuts hook
+      window.dispatchEvent(
+        new CustomEvent("sidebar-shortcut-changed", { detail: shortcut })
+      );
+    } catch {
+      setShortcutMessage("Failed to save shortcut.");
+    }
+    setShortcutSaving(false);
+  };
+
+  const handleResetShortcut = async () => {
+    setSidebarShortcut(DEFAULT_SIDEBAR_SHORTCUT);
+    await saveShortcut(DEFAULT_SIDEBAR_SHORTCUT);
+  };
 
   const handleSave = async () => {
     if (!apiKey.trim()) return;
@@ -87,7 +170,51 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           </div>
 
           {/* Content */}
-          <div className="px-5 py-4 space-y-4">
+          <div className="px-5 py-4 space-y-6">
+            {/* Keyboard Shortcuts */}
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium mb-2">
+                <Keyboard className="w-3.5 h-3.5" />
+                Keyboard Shortcuts
+              </label>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between px-3 py-2 bg-[var(--muted)] rounded-lg">
+                  <span className="text-sm">Toggle Sidebar</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      ref={recordingRef}
+                      onClick={() => setIsRecording(!isRecording)}
+                      className={`px-2 py-1 text-xs font-mono rounded border transition-colors ${
+                        isRecording
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)] animate-pulse"
+                          : "border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)]"
+                      }`}
+                      disabled={shortcutSaving}
+                    >
+                      {isRecording
+                        ? "Press keys..."
+                        : formatShortcut(sidebarShortcut)}
+                    </button>
+                    {sidebarShortcut !== DEFAULT_SIDEBAR_SHORTCUT && (
+                      <button
+                        onClick={handleResetShortcut}
+                        disabled={shortcutSaving}
+                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                        title="Reset to default"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {shortcutMessage && (
+                  <p className="text-xs text-[var(--muted-foreground)]">{shortcutMessage}</p>
+                )}
+              </div>
+            </div>
+
+            {/* API Key */}
             <div>
               <label className="flex items-center gap-2 text-sm font-medium mb-2">
                 <Key className="w-3.5 h-3.5" />
