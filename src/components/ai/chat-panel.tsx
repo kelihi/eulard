@@ -116,15 +116,6 @@ export function ChatPanel() {
     }
   }, []);
 
-  // Handle textarea change (for auto-grow)
-  const handleTextareaChange = useCallback(
-    (e: ChangeEvent<HTMLTextAreaElement>) => {
-      handleInputChange(e);
-      resizeTextarea();
-    },
-    [handleInputChange, resizeTextarea]
-  );
-
   // Load sessions for current diagram (imperative, for refreshes after chat/delete)
   const loadSessions = useCallback(async () => {
     if (!diagramId) return;
@@ -223,6 +214,15 @@ export function ChatPanel() {
         pendingToolCalls = 0;
       },
     });
+
+  // Handle textarea change (for auto-grow)
+  const handleTextareaChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
+      handleInputChange(e);
+      resizeTextarea();
+    },
+    [handleInputChange, resizeTextarea]
+  );
 
   // Reset session when diagram changes
   useEffect(() => {

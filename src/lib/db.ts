@@ -311,15 +311,29 @@ export async function deleteUser(id: string) {
 
 // --- Folders ---
 
-export async function getFolder(id: string) {
+export async function getFolder(id: string, userId?: string) {
+  if (userId) {
+    return queryOne<{
+      id: string;
+      name: string;
+      clientId: string | null;
+      userId: string;
+      createdAt: string;
+      updatedAt: string;
+    }>(
+      'SELECT id, name, client_id AS "clientId", user_id AS "userId", created_at AS "createdAt", updated_at AS "updatedAt" FROM folders WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+  }
   return queryOne<{
     id: string;
     name: string;
+    clientId: string | null;
     userId: string;
     createdAt: string;
     updatedAt: string;
   }>(
-    'SELECT id, name, user_id AS "userId", created_at AS "createdAt", updated_at AS "updatedAt" FROM folders WHERE id = $1',
+    'SELECT id, name, client_id AS "clientId", user_id AS "userId", created_at AS "createdAt", updated_at AS "updatedAt" FROM folders WHERE id = $1',
     [id]
   );
 }
@@ -455,16 +469,6 @@ export async function listDiagrams(userId: string, userEmail?: string) {
   );
 }
 
-export async function getFolder(id: string, userId: string) {
-  return queryOne<{
-    id: string;
-    name: string;
-    clientId: string | null;
-  }>(
-    'SELECT id, name, client_id AS "clientId" FROM folders WHERE id = $1 AND user_id = $2',
-    [id, userId]
-  );
-}
 
 export async function getDiagram(id: string) {
   return queryOne<{
