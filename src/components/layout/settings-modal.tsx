@@ -15,6 +15,10 @@ interface SettingsModalProps {
 }
 
 const DEFAULT_SIDEBAR_SHORTCUT = "mod+b";
+const DEFAULT_CODE_SHORTCUT = "mod+shift+e";
+const DEFAULT_CHAT_SHORTCUT = "mod+/";
+
+type ShortcutTarget = "sidebar" | "code" | "chat";
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [apiKey, setApiKey] = useState("");
@@ -25,9 +29,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [sendMode, setSendMode] = useState<"cmd_enter" | "enter">("cmd_enter");
   const [savingSendMode, setSavingSendMode] = useState(false);
 
-  // Sidebar shortcut state
+  // Shortcut state
   const [sidebarShortcut, setSidebarShortcut] = useState(DEFAULT_SIDEBAR_SHORTCUT);
-  const [isRecording, setIsRecording] = useState(false);
+  const [codeShortcut, setCodeShortcut] = useState(DEFAULT_CODE_SHORTCUT);
+  const [chatShortcut, setChatShortcut] = useState(DEFAULT_CHAT_SHORTCUT);
+  const [recordingTarget, setRecordingTarget] = useState<ShortcutTarget | null>(null);
   const [shortcutSaving, setShortcutSaving] = useState(false);
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
 
@@ -44,7 +50,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           setHasKey(data.hasApiKey);
           setKeyPreview(data.apiKeyPreview);
         });
-      // Load user preferences for shortcut
+      // Load user preferences for shortcuts
       fetch("/api/user-preferences")
         .then((r) => {
           if (!r.ok) return null;
@@ -53,6 +59,12 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         .then((data) => {
           if (data?.sidebarToggleShortcut) {
             setSidebarShortcut(data.sidebarToggleShortcut);
+          }
+          if (data?.codeToggleShortcut) {
+            setCodeShortcut(data.codeToggleShortcut);
+          }
+          if (data?.chatToggleShortcut) {
+            setChatShortcut(data.chatToggleShortcut);
           }
         })
         .catch(() => {});
@@ -66,13 +78,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       setApiKey("");
       setMessage(null);
       setShortcutMessage(null);
-      setIsRecording(false);
+      setRecordingTarget(null);
     }
   }, [open]);
 
   // Handle keyboard recording for shortcut customization
   useEffect(() => {
-    if (!isRecording) return;
+    if (!recordingTarget) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       e.preventDefault();
@@ -89,35 +101,53 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       // Need at least one modifier
       if (parts.length === 0) {
         setShortcutMessage("Shortcut must include a modifier key (Ctrl/Cmd, Shift, or Alt).");
-        setIsRecording(false);
+        setRecordingTarget(null);
         return;
       }
 
       parts.push(e.key.toLowerCase());
       const newShortcut = parts.join("+");
-      setSidebarShortcut(newShortcut);
-      setIsRecording(false);
-      saveShortcut(newShortcut);
+
+      if (recordingTarget === "sidebar") {
+        setSidebarShortcut(newShortcut);
+        saveShortcut("sidebar", newShortcut);
+      } else if (recordingTarget === "code") {
+        setCodeShortcut(newShortcut);
+        saveShortcut("code", newShortcut);
+      } else if (recordingTarget === "chat") {
+        setChatShortcut(newShortcut);
+        saveShortcut("chat", newShortcut);
+      }
+      setRecordingTarget(null);
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [isRecording]);
+  }, [recordingTarget]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveShortcut = async (shortcut: string) => {
+  const saveShortcut = async (target: ShortcutTarget, shortcut: string) => {
     setShortcutSaving(true);
     setShortcutMessage(null);
+    const keyMap: Record<ShortcutTarget, string> = {
+      sidebar: "sidebarToggleShortcut",
+      code: "codeToggleShortcut",
+      chat: "chatToggleShortcut",
+    };
+    const eventMap: Record<ShortcutTarget, string> = {
+      sidebar: "sidebar-shortcut-changed",
+      code: "code-shortcut-changed",
+      chat: "chat-shortcut-changed",
+    };
     try {
       const res = await fetch("/api/user-preferences", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sidebarToggleShortcut: shortcut }),
+        body: JSON.stringify({ [keyMap[target]]: shortcut }),
       });
       if (!res.ok) throw new Error("Failed to save");
       setShortcutMessage("Shortcut saved.");
-      // Notify the keyboard shortcuts hook
       window.dispatchEvent(
-        new CustomEvent("sidebar-shortcut-changed", { detail: shortcut })
+        new CustomEvent(eventMap[target], { detail: shortcut })
       );
     } catch {
       setShortcutMessage("Failed to save shortcut.");
@@ -125,9 +155,19 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setShortcutSaving(false);
   };
 
-  const handleResetShortcut = async () => {
-    setSidebarShortcut(DEFAULT_SIDEBAR_SHORTCUT);
-    await saveShortcut(DEFAULT_SIDEBAR_SHORTCUT);
+  const handleResetShortcut = async (target: ShortcutTarget) => {
+    const defaults: Record<ShortcutTarget, string> = {
+      sidebar: DEFAULT_SIDEBAR_SHORTCUT,
+      code: DEFAULT_CODE_SHORTCUT,
+      chat: DEFAULT_CHAT_SHORTCUT,
+    };
+    const setters: Record<ShortcutTarget, (s: string) => void> = {
+      sidebar: setSidebarShortcut,
+      code: setCodeShortcut,
+      chat: setChatShortcut,
+    };
+    setters[target](defaults[target]);
+    await saveShortcut(target, defaults[target]);
   };
 
   const handleSave = async () => {
@@ -214,25 +254,26 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </label>
 
               <div className="space-y-2">
+                {/* Toggle Sidebar */}
                 <div className="flex items-center justify-between px-3 py-2 bg-[var(--muted)] rounded-lg">
                   <span className="text-sm">Toggle Sidebar</span>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => setIsRecording(!isRecording)}
+                      onClick={() => setRecordingTarget(recordingTarget === "sidebar" ? null : "sidebar")}
                       className={`px-2 py-1 text-xs font-mono rounded border transition-colors ${
-                        isRecording
+                        recordingTarget === "sidebar"
                           ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)] animate-pulse"
                           : "border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)]"
                       }`}
                       disabled={shortcutSaving}
                     >
-                      {isRecording
+                      {recordingTarget === "sidebar"
                         ? "Press keys..."
                         : formatShortcut(sidebarShortcut)}
                     </button>
                     {sidebarShortcut !== DEFAULT_SIDEBAR_SHORTCUT && (
                       <button
-                        onClick={handleResetShortcut}
+                        onClick={() => handleResetShortcut("sidebar")}
                         disabled={shortcutSaving}
                         className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
                         title="Reset to default"
@@ -242,6 +283,67 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     )}
                   </div>
                 </div>
+
+                {/* Toggle Code Editor */}
+                <div className="flex items-center justify-between px-3 py-2 bg-[var(--muted)] rounded-lg">
+                  <span className="text-sm">Toggle Code Editor</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setRecordingTarget(recordingTarget === "code" ? null : "code")}
+                      className={`px-2 py-1 text-xs font-mono rounded border transition-colors ${
+                        recordingTarget === "code"
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)] animate-pulse"
+                          : "border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)]"
+                      }`}
+                      disabled={shortcutSaving}
+                    >
+                      {recordingTarget === "code"
+                        ? "Press keys..."
+                        : formatShortcut(codeShortcut)}
+                    </button>
+                    {codeShortcut !== DEFAULT_CODE_SHORTCUT && (
+                      <button
+                        onClick={() => handleResetShortcut("code")}
+                        disabled={shortcutSaving}
+                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                        title="Reset to default"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Toggle AI Chat */}
+                <div className="flex items-center justify-between px-3 py-2 bg-[var(--muted)] rounded-lg">
+                  <span className="text-sm">Toggle AI Chat</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setRecordingTarget(recordingTarget === "chat" ? null : "chat")}
+                      className={`px-2 py-1 text-xs font-mono rounded border transition-colors ${
+                        recordingTarget === "chat"
+                          ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)] animate-pulse"
+                          : "border-[var(--border)] bg-[var(--background)] hover:border-[var(--primary)]"
+                      }`}
+                      disabled={shortcutSaving}
+                    >
+                      {recordingTarget === "chat"
+                        ? "Press keys..."
+                        : formatShortcut(chatShortcut)}
+                    </button>
+                    {chatShortcut !== DEFAULT_CHAT_SHORTCUT && (
+                      <button
+                        onClick={() => handleResetShortcut("chat")}
+                        disabled={shortcutSaving}
+                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+                        title="Reset to default"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 {shortcutMessage && (
                   <p className="text-xs text-[var(--muted-foreground)]">{shortcutMessage}</p>
                 )}
