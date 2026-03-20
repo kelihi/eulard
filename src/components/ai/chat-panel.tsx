@@ -575,6 +575,7 @@ export function ChatPanel() {
           <div className="flex gap-2 items-end">
             <textarea
               ref={textareaRef}
+              data-chat-input="true"
               value={input}
               onChange={handleTextareaChange}
               onKeyDown={(e) => {

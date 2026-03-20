@@ -16,7 +16,11 @@ const VisualCanvas = dynamic(
 type ViewMode = "split" | "canvas";
 type FullscreenPane = null | "code" | "preview" | "canvas";
 
-export function EditorLayout() {
+interface EditorLayoutProps {
+  codeHidden?: boolean;
+}
+
+export function EditorLayout({ codeHidden = false }: EditorLayoutProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("split");
   const [splitPercent, setSplitPercent] = useState(50);
   const [fullscreenPane, setFullscreenPane] = useState<FullscreenPane>(null);
@@ -122,7 +126,7 @@ export function EditorLayout() {
         <div className="flex flex-1 overflow-hidden min-w-0">
           {viewMode === "split" ? (
             <div ref={containerRef} className="flex flex-1 overflow-hidden">
-              {fullscreenPane !== "preview" && (
+              {!codeHidden && fullscreenPane !== "preview" && (
                 <div
                   style={{ width: fullscreenPane === "code" ? "100%" : `${splitPercent}%` }}
                   className="h-full min-w-0 relative group/pane"
@@ -131,7 +135,7 @@ export function EditorLayout() {
                   <CodeEditor />
                 </div>
               )}
-              {!fullscreenPane && (
+              {!codeHidden && !fullscreenPane && (
                 <div
                   onMouseDown={handleMouseDown}
                   className="w-1 bg-[var(--border)] hover:bg-[var(--primary)] cursor-col-resize transition-colors shrink-0"
@@ -139,7 +143,7 @@ export function EditorLayout() {
               )}
               {fullscreenPane !== "code" && (
                 <div
-                  style={{ width: fullscreenPane === "preview" ? "100%" : `${100 - splitPercent}%` }}
+                  style={{ width: codeHidden || fullscreenPane === "preview" ? "100%" : `${100 - splitPercent}%` }}
                   className="h-full min-w-0 bg-white dark:bg-[var(--muted)] relative group/pane"
                 >
                   {fullscreenButton("preview", "Preview")}
@@ -149,7 +153,7 @@ export function EditorLayout() {
             </div>
           ) : (
             <div className="flex flex-1 overflow-hidden">
-              {fullscreenPane !== "canvas" && (
+              {!codeHidden && fullscreenPane !== "canvas" && (
                 <div
                   style={{ width: fullscreenPane === "code" ? "100%" : "35%" }}
                   className="h-full min-w-0 relative group/pane"
@@ -158,12 +162,12 @@ export function EditorLayout() {
                   <CodeEditor />
                 </div>
               )}
-              {!fullscreenPane && (
+              {!codeHidden && !fullscreenPane && (
                 <div className="w-1 bg-[var(--border)] shrink-0" />
               )}
               {fullscreenPane !== "code" && (
                 <div
-                  style={{ width: fullscreenPane === "canvas" ? "100%" : "65%" }}
+                  style={{ width: codeHidden || fullscreenPane === "canvas" ? "100%" : "65%" }}
                   className="h-full min-w-0 relative group/pane"
                 >
                   {fullscreenButton("canvas", "Visual Canvas")}

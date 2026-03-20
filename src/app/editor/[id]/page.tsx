@@ -24,6 +24,12 @@ export default function EditorPage() {
     }
     return true;
   });
+  const [codeHidden, setCodeHidden] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("eulard-code-hidden") === "true";
+    }
+    return false;
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +41,35 @@ export default function EditorPage() {
     });
   }, []);
 
-  useKeyboardShortcuts({ onToggleSidebar: toggleSidebar });
+  const toggleCode = useCallback(() => {
+    setCodeHidden((prev) => {
+      const next = !prev;
+      localStorage.setItem("eulard-code-hidden", String(next));
+      return next;
+    });
+  }, []);
+
+  const toggleChat = useCallback(() => {
+    setChatOpen((prev) => {
+      const next = !prev;
+      // Focus the chat input when opening
+      if (next) {
+        setTimeout(() => {
+          const textarea = document.querySelector<HTMLTextAreaElement>(
+            '[data-chat-input="true"]'
+          );
+          textarea?.focus();
+        }, 100);
+      }
+      return next;
+    });
+  }, []);
+
+  useKeyboardShortcuts({
+    onToggleSidebar: toggleSidebar,
+    onToggleCode: toggleCode,
+    onToggleChat: toggleChat,
+  });
 
   useEffect(() => {
     setLoading(true);
@@ -148,15 +182,17 @@ export default function EditorPage() {
       </div>
       <div className="flex-1 flex flex-col min-w-0">
         <Header
-          onToggleChat={() => setChatOpen(!chatOpen)}
+          onToggleChat={toggleChat}
           chatOpen={chatOpen}
           onToggleSidebar={toggleSidebar}
           sidebarOpen={sidebarOpen}
+          onToggleCode={toggleCode}
+          codeHidden={codeHidden}
         />
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 min-w-0">
             <ErrorBoundary>
-              <EditorLayout />
+              <EditorLayout codeHidden={codeHidden} />
             </ErrorBoundary>
           </div>
           {chatOpen && (

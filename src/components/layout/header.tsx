@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useDiagramStore } from "@/stores/diagram-store";
-import { Save, MessageSquare, Settings, Share2, LogOut, Shield, User, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Save, MessageSquare, Settings, Share2, LogOut, Shield, User, PanelLeftClose, PanelLeftOpen, Code, CodeXml } from "lucide-react";
 import { Toolbar } from "@/components/editor/toolbar";
 import { SettingsModal } from "./settings-modal";
 import { ShareModal } from "@/components/editor/share-modal";
@@ -13,9 +13,11 @@ interface HeaderProps {
   chatOpen: boolean;
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
+  onToggleCode: () => void;
+  codeHidden: boolean;
 }
 
-export function Header({ onToggleChat, chatOpen, onToggleSidebar, sidebarOpen }: HeaderProps) {
+export function Header({ onToggleChat, chatOpen, onToggleSidebar, sidebarOpen, onToggleCode, codeHidden }: HeaderProps) {
   const { data: session } = useSession();
   const title = useDiagramStore((s) => s.diagram?.title ?? "");
   const isDirty = useDiagramStore((s) => s.isDirty);
@@ -133,6 +135,18 @@ export function Header({ onToggleChat, chatOpen, onToggleSidebar, sidebarOpen }:
           title="Settings"
         >
           <Settings className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={onToggleCode}
+          className={`p-1.5 rounded transition-all ${
+            codeHidden
+              ? "bg-amber-500/10 text-amber-500"
+              : "hover:bg-[var(--muted)]"
+          }`}
+          title={codeHidden ? "Show Code Editor" : "Hide Code Editor"}
+        >
+          {codeHidden ? <CodeXml className="w-4 h-4" /> : <Code className="w-4 h-4" />}
         </button>
 
         <button
