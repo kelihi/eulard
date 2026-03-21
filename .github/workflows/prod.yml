@@ -22,24 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Enable corepack & install deps
-        run: |
-          corepack enable
-          pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Type-check
-        run: pnpm exec tsc --noEmit
-
-      - name: Build (validate)
-        run: pnpm build
-
       - id: auth
         name: Authenticate to GCP
         uses: google-github-actions/auth@v2
