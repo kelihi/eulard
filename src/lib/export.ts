@@ -2,13 +2,11 @@
  * Export the current mermaid diagram as PNG, SVG, or raw code.
  */
 
+import { getMermaidInitConfig } from "@/lib/mermaid-theme";
+
 export async function exportAsSvg(code: string): Promise<string> {
   const mermaid = (await import("mermaid")).default;
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: "strict",
-    theme: "default",
-  });
+  mermaid.initialize(getMermaidInitConfig());
   const { svg } = await mermaid.render("export-svg", code);
   return svg;
 }

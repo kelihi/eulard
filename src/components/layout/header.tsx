@@ -57,17 +57,17 @@ export function Header({ onToggleChat, chatOpen, onToggleSidebar, sidebarOpen }:
 
   return (
     <>
-      <div className="h-11 px-4 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--background)] shrink-0">
+      <div className="h-12 px-4 flex items-center gap-3 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-md shrink-0">
         {/* Sidebar toggle */}
         <button
           onClick={onToggleSidebar}
-          className="p-1.5 rounded hover:bg-[var(--muted)] transition-all"
+          className="p-1.5 rounded-md hover:bg-[var(--muted)] transition-all duration-150"
           title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
         >
           {sidebarOpen ? (
-            <PanelLeftClose className="w-4 h-4" />
+            <PanelLeftClose className="w-[18px] h-[18px]" />
           ) : (
-            <PanelLeftOpen className="w-4 h-4" />
+            <PanelLeftOpen className="w-[18px] h-[18px]" />
           )}
         </button>
 
@@ -112,49 +112,49 @@ export function Header({ onToggleChat, chatOpen, onToggleSidebar, sidebarOpen }:
 
         <button
           onClick={() => diagramId && setShareOpen(true)}
-          className="p-1.5 rounded hover:bg-[var(--muted)] transition-all"
+          className="p-1.5 rounded-md hover:bg-[var(--muted)] transition-all duration-150"
           title="Share"
         >
-          <Share2 className="w-4 h-4" />
+          <Share2 className="w-[18px] h-[18px]" />
         </button>
 
         <button
           onClick={handleSave}
           disabled={!isDirty}
-          className="p-1.5 rounded hover:bg-[var(--muted)] disabled:opacity-30 transition-all"
+          className="p-1.5 rounded-md hover:bg-[var(--muted)] disabled:opacity-30 transition-all duration-150"
           title="Save (Cmd+S)"
         >
-          <Save className="w-4 h-4" />
+          <Save className="w-[18px] h-[18px]" />
         </button>
 
         <button
           onClick={() => setSettingsOpen(true)}
-          className="p-1.5 rounded hover:bg-[var(--muted)] transition-all"
+          className="p-1.5 rounded-md hover:bg-[var(--muted)] transition-all duration-150"
           title="Settings"
         >
-          <Settings className="w-4 h-4" />
+          <Settings className="w-[18px] h-[18px]" />
         </button>
 
         <button
           onClick={onToggleChat}
-          className={`p-1.5 rounded transition-all ${
+          className={`p-1.5 rounded-md transition-all duration-150 ${
             chatOpen
-              ? "bg-[var(--primary)] text-[var(--primary-foreground)]"
+              ? "bg-[var(--primary)] text-[var(--primary-foreground)] shadow-sm"
               : "hover:bg-[var(--muted)]"
           }`}
           title="Toggle AI Chat"
         >
-          <MessageSquare className="w-4 h-4" />
+          <MessageSquare className="w-[18px] h-[18px]" />
         </button>
 
         {/* User menu */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
-            className="p-1.5 rounded hover:bg-[var(--muted)] transition-all"
+            className="p-1.5 rounded-md hover:bg-[var(--muted)] transition-all duration-150"
             title={session?.user?.email || "Account"}
           >
-            <User className="w-4 h-4" />
+            <User className="w-[18px] h-[18px]" />
           </button>
 
           {userMenuOpen && (

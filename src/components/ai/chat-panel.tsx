@@ -296,7 +296,7 @@ export function ChatPanel() {
   return (
     <div className="flex flex-col h-full bg-[var(--background)] border-l border-[var(--border)]">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2 shrink-0">
+      <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-md flex items-center gap-2 shrink-0">
         <Sparkles className="w-4 h-4 text-[var(--primary)]" />
         <div className="flex-1 min-w-0 relative" ref={sessionListRef}>
           <button
@@ -412,25 +412,29 @@ export function ChatPanel() {
 
         {/* Status indicators */}
         {status === "submitted" && (
-          <div className="flex items-center gap-2 px-4 py-2 text-xs text-[var(--muted-foreground)]">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--primary)]" />
+          <div className="flex items-center gap-2 px-4 py-2.5 mx-3 text-xs text-[var(--muted-foreground)] bg-[var(--muted)] rounded-lg">
+            <div className="flex gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
             <span>Thinking...</span>
           </div>
         )}
         {status === "streaming" && (
-          <div className="flex items-center gap-2 px-4 py-2 text-xs text-[var(--primary)]">
+          <div className="flex items-center gap-2 px-4 py-2.5 mx-3 text-xs text-[var(--primary)] bg-[var(--primary)]/5 rounded-lg">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             <span>Writing...</span>
           </div>
         )}
         {showDone && !isLoading && (
-          <div className="flex items-center gap-2 px-4 py-2 text-xs text-green-500">
+          <div className="flex items-center gap-2 px-4 py-2.5 mx-3 text-xs text-[var(--success)] bg-[var(--success)]/10 rounded-lg">
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Done</span>
           </div>
         )}
         {chatError && (
-          <div className="flex items-center gap-2 px-4 py-2 text-xs text-red-500 bg-red-500/10 rounded-md mx-3">
+          <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-red-500 bg-red-500/10 rounded-lg mx-3">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             <span>{chatError}</span>
           </div>
@@ -593,14 +597,14 @@ export function ChatPanel() {
               placeholder="Describe your diagram..."
               disabled={isLoading}
               rows={1}
-              className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50 resize-none overflow-y-auto"
+              className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-[var(--border)] bg-[var(--muted)] focus:bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50 resize-none overflow-y-auto transition-all duration-150"
               style={{ maxHeight: "150px" }}
             />
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
               title={sendMode === "cmd_enter" ? "Send (Cmd+Enter)" : "Send (Enter)"}
-              className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
+              className="px-3 py-2.5 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-xl hover:opacity-90 disabled:opacity-50 transition-all duration-150 shrink-0 shadow-sm"
             >
               <Send className="w-4 h-4" />
             </button>

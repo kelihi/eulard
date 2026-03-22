@@ -121,20 +121,24 @@ function useNodeStyles(nodeId: string | null): React.CSSProperties {
   }, [styleOverridesJson, nodeId]);
 }
 
+const nodeBase = "bg-[var(--background)] text-sm font-medium shadow-[0_1px_3px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center transition-all duration-150";
+const nodeSelected = "border-[var(--primary)] ring-2 ring-[var(--primary)]/30 shadow-[0_0_0_1px_var(--primary),0_4px_12px_rgba(99,102,241,0.15)]";
+const nodeUnselected = "border-[var(--border)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:-translate-y-0.5";
+
 function DefaultNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
   return (
     <div
-      className={`px-4 py-2 rounded border-2 bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center ${
-        selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+      className={`px-4 py-2.5 rounded-lg border-2 ${nodeBase} ${
+        selected ? nodeSelected : nodeUnselected
       }`}
       style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
     </div>
   );
 }
@@ -144,9 +148,9 @@ function DecisionNode({ data, selected }: NodeProps) {
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
   return (
-    <div className="relative flex items-center justify-center w-full h-full">
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+    <div className="relative flex items-center justify-center w-full h-full transition-all duration-150">
+      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full" style={{ filter: selected ? "drop-shadow(0 0 6px rgba(99,102,241,0.2))" : "drop-shadow(0 1px 2px rgba(0,0,0,0.06))" }}>
         <polygon
           points="50,2 98,50 50,98 2,50"
           fill={nodeStyles.backgroundColor ?? "var(--background)"}
@@ -160,7 +164,7 @@ function DecisionNode({ data, selected }: NodeProps) {
             fill="none"
             stroke="var(--primary)"
             strokeWidth="6"
-            strokeOpacity="0.3"
+            strokeOpacity="0.2"
             vectorEffect="non-scaling-stroke"
           />
         )}
@@ -171,7 +175,7 @@ function DecisionNode({ data, selected }: NodeProps) {
       >
         <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       </span>
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
     </div>
   );
 }
@@ -182,14 +186,14 @@ function StadiumNode({ data, selected }: NodeProps) {
   const nodeStyles = useNodeStyles(nodeId);
   return (
     <div
-      className={`px-4 py-2 rounded-full border-2 bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center ${
-        selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+      className={`px-5 py-2.5 rounded-full border-2 ${nodeBase} ${
+        selected ? nodeSelected : nodeUnselected
       }`}
       style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
     </div>
   );
 }
@@ -200,14 +204,14 @@ function SubroutineNode({ data, selected }: NodeProps) {
   const nodeStyles = useNodeStyles(nodeId);
   return (
     <div
-      className={`px-4 py-2 border-double border-4 bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center ${
-        selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+      className={`px-4 py-2.5 border-double border-4 rounded-lg ${nodeBase} ${
+        selected ? nodeSelected : nodeUnselected
       }`}
       style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
     </div>
   );
 }
@@ -217,17 +221,17 @@ function CylinderNode({ data, selected }: NodeProps) {
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
   return (
-    <div className="relative flex items-center justify-center w-full h-full">
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+    <div className="relative flex items-center justify-center w-full h-full transition-all duration-150">
+      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
       <div
-        className={`px-4 py-3 border-2 bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%] whitespace-normal break-words w-full h-full flex items-center justify-center ${
-          selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+        className={`px-4 py-3 border-2 ${nodeBase} rounded-b-[50%] rounded-t-[50%] ${
+          selected ? nodeSelected : nodeUnselected
         }`}
         style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
       >
         <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
     </div>
   );
 }
@@ -238,14 +242,14 @@ function CircleNode({ data, selected }: NodeProps) {
   const nodeStyles = useNodeStyles(nodeId);
   return (
     <div
-      className={`rounded-full border-2 bg-[var(--background)] text-sm font-medium shadow-sm flex items-center justify-center text-center whitespace-normal break-words p-2 w-full h-full ${
-        selected ? "border-[var(--primary)] ring-2 ring-[var(--primary)] ring-opacity-40" : "border-[var(--border)]"
+      className={`rounded-full border-2 ${nodeBase} p-2.5 ${
+        selected ? nodeSelected : nodeUnselected
       }`}
       style={{ ...nodeStyles, ...(selected ? { borderColor: 'var(--primary)' } : {}) }}
     >
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
       <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2 !border-none" />
     </div>
   );
 }
