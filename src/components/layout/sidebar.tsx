@@ -145,12 +145,15 @@ export function Sidebar() {
       onDragStart={!isShared ? (e) => handleDragStart(e, d.id) : undefined}
       onClick={() => router.push(`/editor/${d.id}`)}
       className={cn(
-        "flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-sm group transition-colors",
+        "flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer text-sm group transition-all duration-150 relative",
         d.id === currentId
           ? "bg-[var(--background)] shadow-sm"
           : "hover:bg-[var(--background)]/50"
       )}
     >
+      {d.id === currentId && (
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-[var(--primary)]" />
+      )}
       <FileText className="w-3.5 h-3.5 text-[var(--muted-foreground)] shrink-0" />
       <span className="truncate flex-1">{d.title}</span>
       {isShared && (
@@ -330,7 +333,7 @@ export function Sidebar() {
           <div className="pt-1 mt-1 border-t border-[var(--border)]">
             <div
               className={cn(
-                "px-2 py-1 text-xs text-[var(--muted-foreground)] font-medium",
+                "px-2 py-1 text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] font-semibold",
                 dragOverFolderId === "uncategorized" && "bg-[var(--primary)]/10 rounded"
               )}
               onDragOver={(e) => handleDragOver(e, "uncategorized")}
@@ -370,7 +373,7 @@ export function Sidebar() {
                 )}
               />
               <Users className="w-3.5 h-3.5 text-[var(--muted-foreground)] shrink-0" />
-              <span className="text-xs font-medium text-[var(--muted-foreground)]">
+              <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--muted-foreground)]">
                 Shared Folders
               </span>
               <span className="text-xs text-[var(--muted-foreground)] ml-auto">
@@ -451,7 +454,7 @@ export function Sidebar() {
                 )}
               />
               <Users className="w-3.5 h-3.5 text-[var(--muted-foreground)] shrink-0" />
-              <span className="text-xs font-medium text-[var(--muted-foreground)]">
+              <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--muted-foreground)]">
                 Shared with me
               </span>
               <span className="text-xs text-[var(--muted-foreground)] ml-auto">

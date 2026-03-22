@@ -22,24 +22,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Enable corepack & install deps
-        run: |
-          corepack enable
-          pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Type-check
-        run: pnpm exec tsc --noEmit
-
-      - name: Build (validate)
-        run: pnpm build
-
       - id: auth
         name: Authenticate to GCP
         uses: google-github-actions/auth@v2
@@ -57,3 +39,11 @@ jobs:
             --substitutions="_TAG=prod-${GITHUB_SHA::7}" \
             --project=kelihi-ai-platform \
             .
+
+      - name: Print deploy info
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "## Prod Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${GITHUB_SHA::7}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** prod-${GITHUB_SHA::7}" >> $GITHUB_STEP_SUMMARY

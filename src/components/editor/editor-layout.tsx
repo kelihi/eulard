@@ -73,23 +73,23 @@ export function EditorLayout({ codeHidden = false }: EditorLayoutProps) {
   return (
     <div className="flex flex-col h-full">
       {/* View mode toggle */}
-      <div className="flex items-center gap-1 px-2 py-1 border-b border-[var(--border)] bg-[var(--muted)] shrink-0">
+      <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-[var(--border)] bg-[var(--muted)] shrink-0">
         <button
           onClick={() => { setViewMode("split"); setFullscreenPane(null); }}
-          className={`px-2 py-0.5 text-xs rounded transition-colors ${
+          className={`px-3 py-1 text-xs rounded-md transition-all duration-150 ${
             viewMode === "split"
-              ? "bg-[var(--background)] shadow-sm font-medium"
-              : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              ? "bg-[var(--background)] shadow-sm font-medium text-[var(--foreground)]"
+              : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--background)]/50"
           }`}
         >
           Code + Preview
         </button>
         <button
           onClick={() => { setViewMode("canvas"); setFullscreenPane(null); }}
-          className={`px-2 py-0.5 text-xs rounded transition-colors ${
+          className={`px-3 py-1 text-xs rounded-md transition-all duration-150 ${
             viewMode === "canvas"
-              ? "bg-[var(--background)] shadow-sm font-medium"
-              : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              ? "bg-[var(--background)] shadow-sm font-medium text-[var(--foreground)]"
+              : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--background)]/50"
           }`}
         >
           Visual Canvas
@@ -138,7 +138,7 @@ export function EditorLayout({ codeHidden = false }: EditorLayoutProps) {
               {!codeHidden && !fullscreenPane && (
                 <div
                   onMouseDown={handleMouseDown}
-                  className="w-1 bg-[var(--border)] hover:bg-[var(--primary)] cursor-col-resize transition-colors shrink-0"
+                  className="w-px bg-[var(--border)] hover:w-0.5 hover:bg-[var(--primary)] cursor-col-resize transition-all duration-150 shrink-0"
                 />
               )}
               {fullscreenPane !== "code" && (
@@ -163,7 +163,7 @@ export function EditorLayout({ codeHidden = false }: EditorLayoutProps) {
                 </div>
               )}
               {!codeHidden && !fullscreenPane && (
-                <div className="w-1 bg-[var(--border)] shrink-0" />
+                <div className="w-px bg-[var(--border)] shrink-0" />
               )}
               {fullscreenPane !== "code" && (
                 <div

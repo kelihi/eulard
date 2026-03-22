@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   applyNodeChanges,
@@ -407,12 +408,15 @@ export function VisualCanvas() {
         panOnScroll
         proOptions={{ hideAttribution: true }}
       >
-        <Background />
-        <Controls />
+        <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--muted-foreground)" style={{ opacity: 0.3 }} />
+        <Controls showInteractive={false} />
         <MiniMap
           nodeStrokeColor="var(--border)"
-          nodeColor="var(--background)"
-          maskColor="rgba(0,0,0,0.1)"
+          nodeColor="var(--muted)"
+          maskColor="rgba(0,0,0,0.08)"
+          style={{ borderRadius: 8 }}
+          pannable
+          zoomable
         />
       </ReactFlow>
       {contextMenu && !isLocked && (
