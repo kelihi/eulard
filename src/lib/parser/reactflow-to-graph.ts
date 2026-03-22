@@ -4,7 +4,7 @@ import type { FlowNodeData } from "./graph-to-reactflow";
 
 /**
  * Update node positions in a flowchart graph from React Flow node state.
- * Preserves all other graph data (edges, labels, types).
+ * Preserves all other graph data (edges, labels, types, subgraphs).
  */
 export function updateGraphPositions(
   graph: FlowchartGraph,
@@ -34,12 +34,15 @@ export function reactFlowToGraph(
   return {
     diagramType: "flowchart",
     direction,
-    nodes: rfNodes.map((n) => ({
-      id: n.id,
-      label: (n.data?.label as string) ?? n.id,
-      type: ((n.data?.mermaidType as string) ?? "default") as MermaidNodeType,
-      position: n.position,
-    })),
+    nodes: rfNodes
+      .filter((n) => !(n.data as FlowNodeData)?.isSubgraph)
+      .map((n) => ({
+        id: n.id,
+        label: (n.data?.label as string) ?? n.id,
+        type: ((n.data?.mermaidType as string) ?? "default") as MermaidNodeType,
+        position: n.position,
+      })),
     edges: [], // edges are preserved from the existing graph
+    subgraphs: [], // subgraphs are preserved from the existing graph
   };
 }

@@ -16,6 +16,9 @@ import {
   applyAddEdges,
   applyRemoveEdges,
   applyUpdateEdges,
+  applyAddSubgraph,
+  applyRemoveSubgraph,
+  applyUpdateSubgraph,
 } from "@/lib/graph-operations";
 import {
   addNodesSchema,
@@ -24,6 +27,9 @@ import {
   addEdgesSchema,
   removeEdgesSchema,
   updateEdgesSchema,
+  addSubgraphSchema,
+  removeSubgraphSchema,
+  updateSubgraphSchema,
   replaceDiagramSchema,
 } from "@/lib/ai/tools";
 import { useAISettingsStore } from "@/stores/ai-settings-store";
@@ -719,6 +725,47 @@ async function handleToolCall(toolCall: { toolName: string; args: unknown }): Pr
     const newCode = graphToMermaid(result.graph);
     useDiagramStore.getState().setCode(newCode);
     return `Updated ${args.updates.length} edge(s)`;
+  }
+
+  // --- Subgraph operation tools ---
+
+  if (toolCall.toolName === "addSubgraph") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = addSubgraphSchema.parse(toolCall.args);
+    const result = applyAddSubgraph(parsed.graph, args);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Added subgraph "${args.id}" with ${args.nodeIds.length} node(s)`;
+  }
+
+  if (toolCall.toolName === "removeSubgraph") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = removeSubgraphSchema.parse(toolCall.args);
+    const result = applyRemoveSubgraph(parsed.graph, args.subgraphId);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Removed subgraph "${args.subgraphId}"`;
+  }
+
+  if (toolCall.toolName === "updateSubgraph") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = updateSubgraphSchema.parse(toolCall.args);
+    const result = applyUpdateSubgraph(parsed.graph, args);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Updated subgraph "${args.id}"`;
   }
 
   // --- replaceDiagram (escape hatch) ---
