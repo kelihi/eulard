@@ -18,16 +18,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0f172a;
-    --foreground: #e2e8f0;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --border: #334155;
+    --background: #111111;
+    --foreground: #ededed;
+    --muted: #1a1a1a;
+    --muted-foreground: #a0a0a0;
+    --border: #2a2a2a;
     --primary: #818cf8;
     --primary-foreground: #ffffff;
     --destructive: #f87171;
     --accent: #1e1b4b;
-    --surface: #1e293b;
+    --surface: #1a1a1a;
     --success: #4ade80;
     --warning: #fbbf24;
     --info: #60a5fa;

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
 import type { DiagramStyles } from "@/types/graph";
-import { getMermaidInitConfig } from "@/lib/mermaid-theme";
+import { getMermaidInitConfig, applyMermaidTheme } from "@/lib/mermaid-theme";
 import {
   ZoomIn,
   ZoomOut,
@@ -341,14 +341,19 @@ export function MermaidPreview() {
           // Re-apply section visibility to the newly rendered SVG
           applySectionVisibility(sectionsRef.current);
 
-          // Apply style overrides to the rendered SVG
+          // Apply base theme CSS to the rendered SVG
           const svgEl = containerRef.current.querySelector("svg");
-          if (svgEl && styleOverridesJson) {
-            try {
-              const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
-              applyStylesToSvg(svgEl, styles);
-            } catch {
-              // ignore invalid JSON
+          if (svgEl) {
+            applyMermaidTheme(svgEl as SVGSVGElement);
+
+            // Apply user style overrides on top of the base theme
+            if (styleOverridesJson) {
+              try {
+                const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
+                applyStylesToSvg(svgEl as SVGSVGElement, styles);
+              } catch {
+                // ignore invalid JSON
+              }
             }
           }
 

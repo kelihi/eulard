@@ -1,106 +1,7 @@
 /**
  * Shared mermaid theme configuration for light and dark modes.
- * Used by both the preview component and export utilities.
+ * Uses post-render CSS injection for guaranteed theme application.
  */
-
-export interface MermaidThemeConfig {
-  theme: "base";
-  themeVariables: Record<string, string>;
-}
-
-const lightTheme: MermaidThemeConfig = {
-  theme: "base",
-  themeVariables: {
-    // Background & text
-    primaryColor: "#f8fafc",
-    primaryTextColor: "#1e293b",
-    primaryBorderColor: "#e2e8f0",
-    // Lines & edges
-    lineColor: "#94a3b8",
-    // Secondary (decision nodes, etc.)
-    secondaryColor: "#f1f5f9",
-    secondaryTextColor: "#1e293b",
-    secondaryBorderColor: "#e2e8f0",
-    // Tertiary
-    tertiaryColor: "#f0f0ff",
-    tertiaryTextColor: "#1e293b",
-    tertiaryBorderColor: "#e2e8f0",
-    // Fonts
-    fontFamily: "var(--font-inter, system-ui, -apple-system, sans-serif)",
-    fontSize: "14px",
-    // Notes
-    noteBkgColor: "#f8fafc",
-    noteTextColor: "#1e293b",
-    noteBorderColor: "#e2e8f0",
-    // Flowchart specifics
-    nodeBorder: "#e2e8f0",
-    mainBkg: "#f8fafc",
-    clusterBkg: "#f8fafc",
-    clusterBorder: "#e2e8f0",
-    titleColor: "#1e293b",
-    edgeLabelBackground: "#ffffff",
-    // Sequence diagram
-    actorBkg: "#f8fafc",
-    actorBorder: "#e2e8f0",
-    actorTextColor: "#1e293b",
-    signalColor: "#94a3b8",
-    signalTextColor: "#1e293b",
-    labelBoxBkgColor: "#f8fafc",
-    labelBoxBorderColor: "#e2e8f0",
-    labelTextColor: "#1e293b",
-    loopTextColor: "#64748b",
-    activationBorderColor: "#e2e8f0",
-    activationBkgColor: "#f1f5f9",
-    sequenceNumberColor: "#ffffff",
-  },
-};
-
-const darkTheme: MermaidThemeConfig = {
-  theme: "base",
-  themeVariables: {
-    // Background & text
-    primaryColor: "#1e293b",
-    primaryTextColor: "#e2e8f0",
-    primaryBorderColor: "#334155",
-    // Lines & edges
-    lineColor: "#64748b",
-    // Secondary
-    secondaryColor: "#334155",
-    secondaryTextColor: "#e2e8f0",
-    secondaryBorderColor: "#475569",
-    // Tertiary
-    tertiaryColor: "#1e1b4b",
-    tertiaryTextColor: "#e2e8f0",
-    tertiaryBorderColor: "#334155",
-    // Fonts
-    fontFamily: "var(--font-inter, system-ui, -apple-system, sans-serif)",
-    fontSize: "14px",
-    // Notes
-    noteBkgColor: "#1e293b",
-    noteTextColor: "#e2e8f0",
-    noteBorderColor: "#334155",
-    // Flowchart specifics
-    nodeBorder: "#334155",
-    mainBkg: "#1e293b",
-    clusterBkg: "#1e293b",
-    clusterBorder: "#334155",
-    titleColor: "#e2e8f0",
-    edgeLabelBackground: "#0f172a",
-    // Sequence diagram
-    actorBkg: "#1e293b",
-    actorBorder: "#334155",
-    actorTextColor: "#e2e8f0",
-    signalColor: "#64748b",
-    signalTextColor: "#e2e8f0",
-    labelBoxBkgColor: "#1e293b",
-    labelBoxBorderColor: "#334155",
-    labelTextColor: "#e2e8f0",
-    loopTextColor: "#94a3b8",
-    activationBorderColor: "#334155",
-    activationBkgColor: "#334155",
-    sequenceNumberColor: "#e2e8f0",
-  },
-};
 
 /** Detect if the user prefers dark mode */
 export function isDarkMode(): boolean {
@@ -108,23 +9,132 @@ export function isDarkMode(): boolean {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
-/** Get the mermaid theme config for the current color scheme */
-export function getMermaidThemeConfig(): MermaidThemeConfig {
-  return isDarkMode() ? darkTheme : lightTheme;
-}
-
-/** Get the full mermaid.initialize() config */
+/** Get the mermaid.initialize() config (basic settings only — theme applied via CSS) */
 export function getMermaidInitConfig() {
-  const themeConfig = getMermaidThemeConfig();
   return {
     startOnLoad: false,
     securityLevel: "strict" as const,
-    theme: themeConfig.theme,
-    themeVariables: themeConfig.themeVariables,
+    theme: "neutral" as const,
     flowchart: {
       htmlLabels: true,
       useMaxWidth: false,
       curve: "basis" as const,
     },
   };
+}
+
+/**
+ * Apply theme colors to a rendered mermaid SVG via CSS injection.
+ * This overrides mermaid's built-in theme colors with our design system.
+ * Called after every render, before any user style overrides.
+ */
+export function applyMermaidTheme(svgEl: SVGSVGElement): void {
+  // Remove any previously injected theme
+  const existing = svgEl.querySelector("style[data-eulard-theme]");
+  if (existing) existing.remove();
+
+  const dark = isDarkMode();
+
+  // Color tokens
+  const nodeBg = dark ? "#1f1f1f" : "#f8fafc";
+  const nodeText = dark ? "#e5e5e5" : "#1e293b";
+  const nodeBorder = dark ? "#3a3a3a" : "#cbd5e1";
+  const edgeColor = dark ? "#555555" : "#94a3b8";
+  const edgeLabelBg = dark ? "#111111" : "#ffffff";
+  const clusterBg = dark ? "#1a1a1a" : "#f1f5f9";
+  const clusterBorder = dark ? "#2a2a2a" : "#e2e8f0";
+  const fontFamily = "Inter, system-ui, -apple-system, sans-serif";
+
+  const css = `
+    /* === Eulard Theme (${dark ? "dark" : "light"}) === */
+
+    /* Node shapes */
+    .node rect,
+    .node polygon,
+    .node circle,
+    .node ellipse,
+    .node path,
+    .node .basic.label-container {
+      fill: ${nodeBg} !important;
+      stroke: ${nodeBorder} !important;
+      stroke-width: 1.5px !important;
+      rx: 6 !important;
+      ry: 6 !important;
+    }
+
+    /* Node text */
+    .node .nodeLabel,
+    .node .label,
+    .node .label div,
+    .node .label span,
+    .node foreignObject div {
+      color: ${nodeText} !important;
+      fill: ${nodeText} !important;
+      font-family: ${fontFamily} !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
+    }
+
+    /* Edge lines */
+    .edgePath path.path,
+    .edgePath path,
+    .flowchart-link {
+      stroke: ${edgeColor} !important;
+      stroke-width: 1.5px !important;
+    }
+
+    /* Arrowheads */
+    marker path,
+    .arrowheadPath,
+    marker[id*="arrow"] path,
+    defs marker path {
+      fill: ${edgeColor} !important;
+      stroke: ${edgeColor} !important;
+    }
+
+    /* Edge labels */
+    .edgeLabel,
+    .edgeLabel rect,
+    .edgeLabel .label {
+      background-color: ${edgeLabelBg} !important;
+      fill: ${edgeLabelBg} !important;
+    }
+
+    .edgeLabel span,
+    .edgeLabel .label span {
+      color: ${nodeText} !important;
+      fill: ${nodeText} !important;
+      font-family: ${fontFamily} !important;
+      font-size: 12px !important;
+      background: ${edgeLabelBg} !important;
+    }
+
+    /* Cluster/subgraph backgrounds */
+    .cluster rect {
+      fill: ${clusterBg} !important;
+      stroke: ${clusterBorder} !important;
+      stroke-width: 1px !important;
+      rx: 8 !important;
+      ry: 8 !important;
+    }
+
+    .cluster-label .nodeLabel,
+    .cluster .label {
+      color: ${nodeText} !important;
+      fill: ${nodeText} !important;
+      font-family: ${fontFamily} !important;
+      font-weight: 600 !important;
+    }
+
+    /* Title */
+    .titleText {
+      fill: ${nodeText} !important;
+      font-family: ${fontFamily} !important;
+    }
+  `;
+
+  const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+  styleEl.setAttribute("data-eulard-theme", "true");
+  styleEl.textContent = css;
+  svgEl.prepend(styleEl);
 }
