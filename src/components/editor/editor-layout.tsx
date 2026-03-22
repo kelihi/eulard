@@ -141,7 +141,7 @@ export function EditorLayout({ codeHidden = false }: EditorLayoutProps) {
                   className="w-px bg-[var(--border)] hover:w-0.5 hover:bg-[var(--primary)] cursor-col-resize transition-all duration-150 shrink-0"
                 />
               )}
-              {fullscreenPane !== "code" && (
+              {(fullscreenPane !== "code" || codeHidden) && (
                 <div
                   style={{ width: codeHidden || fullscreenPane === "preview" ? "100%" : `${100 - splitPercent}%` }}
                   className="h-full min-w-0 bg-white dark:bg-[var(--muted)] relative group/pane"
@@ -165,7 +165,7 @@ export function EditorLayout({ codeHidden = false }: EditorLayoutProps) {
               {!codeHidden && !fullscreenPane && (
                 <div className="w-px bg-[var(--border)] shrink-0" />
               )}
-              {fullscreenPane !== "code" && (
+              {(fullscreenPane !== "code" || codeHidden) && (
                 <div
                   style={{ width: codeHidden || fullscreenPane === "canvas" ? "100%" : "65%" }}
                   className="h-full min-w-0 relative group/pane"
