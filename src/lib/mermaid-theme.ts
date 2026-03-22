@@ -36,13 +36,13 @@ export function applyMermaidTheme(svgEl: SVGSVGElement): void {
   const dark = isDarkMode();
 
   // Color tokens
-  const nodeBg = dark ? "#1f1f1f" : "#f8fafc";
+  const nodeBg = dark ? "#1f1f1f" : "#ffffff";
   const nodeText = dark ? "#e5e5e5" : "#1e293b";
-  const nodeBorder = dark ? "#3a3a3a" : "#cbd5e1";
+  const nodeBorder = dark ? "#3a3a3a" : "#94a3b8";
   const edgeColor = dark ? "#555555" : "#94a3b8";
   const edgeLabelBg = dark ? "#111111" : "#ffffff";
-  const clusterBg = dark ? "#1a1a1a" : "#f1f5f9";
-  const clusterBorder = dark ? "#2a2a2a" : "#e2e8f0";
+  const clusterBg = dark ? "#1a1a1a" : "#f8fafc";
+  const clusterBorder = dark ? "#2a2a2a" : "#cbd5e1";
   const fontFamily = "Inter, system-ui, -apple-system, sans-serif";
 
   const css = `
