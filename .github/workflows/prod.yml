@@ -39,3 +39,11 @@ jobs:
             --substitutions="_TAG=prod-${GITHUB_SHA::7}" \
             --project=kelihi-ai-platform \
             .
+
+      - name: Print deploy info
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "## Prod Deploy" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version:** ${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${GITHUB_SHA::7}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** prod-${GITHUB_SHA::7}" >> $GITHUB_STEP_SUMMARY
