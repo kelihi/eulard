@@ -120,12 +120,22 @@ export function applyRemoveNodes(
       edges: graph.edges.filter(
         (e) => !removeSet.has(e.source) && !removeSet.has(e.target)
       ),
-      subgraphs: graph.subgraphs
-        .map((sg) => ({
+      subgraphs: (() => {
+        const updated = graph.subgraphs.map((sg) => ({
           ...sg,
           nodeIds: sg.nodeIds.filter((nid) => !removeSet.has(nid)),
-        }))
-        .filter((sg) => sg.nodeIds.length > 0),
+        }));
+        const removedSgIds = new Set(
+          updated.filter((sg) => sg.nodeIds.length === 0).map((sg) => sg.id)
+        );
+        return updated
+          .filter((sg) => sg.nodeIds.length > 0)
+          .map((sg) =>
+            sg.parentSubgraph && removedSgIds.has(sg.parentSubgraph)
+              ? { ...sg, parentSubgraph: undefined }
+              : sg
+          );
+      })(),
     },
   };
 }
