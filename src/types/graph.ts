@@ -33,11 +33,19 @@ export interface GraphEdge {
   type: MermaidEdgeType;
 }
 
+export interface GraphSubgraph {
+  id: string;
+  label: string;
+  nodeIds: string[];
+  parentSubgraph?: string;
+}
+
 export interface FlowchartGraph {
   diagramType: "flowchart";
   direction: FlowchartDirection;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  subgraphs: GraphSubgraph[];
 }
 
 export type DiagramGraph = FlowchartGraph;

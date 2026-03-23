@@ -28,17 +28,57 @@ function estimateNodeSize(label: string): { width: number; height: number } {
  * Used when nodes have no positions (freshly parsed from code).
  */
 export function autoLayout(graph: FlowchartGraph): FlowchartGraph {
-  const g = new dagre.graphlib.Graph();
+  const hasSubgraphs = graph.subgraphs.length > 0;
+  const g = new dagre.graphlib.Graph({ compound: hasSubgraphs });
   g.setDefaultEdgeLabel(() => ({}));
 
   const rankdir = directionToRankdir(graph.direction);
   g.setGraph({ rankdir, nodesep: 50, ranksep: 60 });
+
+  // Add subgraph cluster nodes
+  if (hasSubgraphs) {
+    for (const sg of graph.subgraphs) {
+      g.setNode(sg.id, { clusterLabelPos: "top", label: sg.label, width: 0, height: 0 });
+      if (sg.parentSubgraph) {
+        g.setParent(sg.id, sg.parentSubgraph);
+      }
+    }
+  }
+
+  // Build nodeId -> innermost subgraph lookup
+  const nodeToSubgraph = new Map<string, string>();
+  if (hasSubgraphs) {
+    for (const sg of graph.subgraphs) {
+      for (const nid of sg.nodeIds) {
+        nodeToSubgraph.set(nid, sg.id);
+      }
+    }
+    // Re-assign to innermost subgraph (smallest nodeIds set)
+    if (graph.subgraphs.length > 1) {
+      for (const [nid] of nodeToSubgraph) {
+        let bestSg: string | undefined;
+        let bestSize = Infinity;
+        for (const sg of graph.subgraphs) {
+          if (sg.nodeIds.includes(nid) && sg.nodeIds.length < bestSize) {
+            bestSize = sg.nodeIds.length;
+            bestSg = sg.id;
+          }
+        }
+        if (bestSg) nodeToSubgraph.set(nid, bestSg);
+      }
+    }
+  }
 
   const nodeSizes = new Map<string, { width: number; height: number }>();
   for (const node of graph.nodes) {
     const size = estimateNodeSize(node.label);
     nodeSizes.set(node.id, size);
     g.setNode(node.id, { width: size.width, height: size.height });
+    // Set parent for compound layout
+    const parentSg = nodeToSubgraph.get(node.id);
+    if (parentSg) {
+      g.setParent(node.id, parentSg);
+    }
   }
 
   for (const edge of graph.edges) {
@@ -52,6 +92,20 @@ export function autoLayout(graph: FlowchartGraph): FlowchartGraph {
     nodes: graph.nodes.map((node) => {
       const dagreNode = g.node(node.id);
       const size = nodeSizes.get(node.id) ?? { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT };
+      // For nodes inside subgraphs, compute position relative to subgraph parent
+      const parentSg = nodeToSubgraph.get(node.id);
+      if (parentSg) {
+        const parentNode = g.node(parentSg);
+        if (parentNode) {
+          return {
+            ...node,
+            position: {
+              x: dagreNode.x - parentNode.x + (parentNode.width ?? 0) / 2 - size.width / 2,
+              y: dagreNode.y - parentNode.y + (parentNode.height ?? 0) / 2 - size.height / 2 + 30, // offset for label
+            },
+          };
+        }
+      }
       return {
         ...node,
         position: {
@@ -60,6 +114,7 @@ export function autoLayout(graph: FlowchartGraph): FlowchartGraph {
         },
       };
     }),
+    subgraphs: graph.subgraphs,
   };
 }
 

@@ -2,6 +2,7 @@ import type {
   FlowchartGraph,
   GraphNode,
   GraphEdge,
+  GraphSubgraph,
   MermaidNodeType,
   MermaidEdgeType,
 } from "@/types/graph";
@@ -43,6 +44,19 @@ export interface EdgeUpdate {
   target: string;
   label?: string | null;
   type?: MermaidEdgeType;
+}
+
+export interface SubgraphInput {
+  id: string;
+  label: string;
+  nodeIds: string[];
+}
+
+export interface SubgraphUpdate {
+  id: string;
+  label?: string;
+  addNodeIds?: string[];
+  removeNodeIds?: string[];
 }
 
 // --- Operations ---
@@ -106,6 +120,12 @@ export function applyRemoveNodes(
       edges: graph.edges.filter(
         (e) => !removeSet.has(e.source) && !removeSet.has(e.target)
       ),
+      subgraphs: graph.subgraphs
+        .map((sg) => ({
+          ...sg,
+          nodeIds: sg.nodeIds.filter((nid) => !removeSet.has(nid)),
+        }))
+        .filter((sg) => sg.nodeIds.length > 0),
     },
   };
 }
@@ -200,6 +220,123 @@ export function applyRemoveEdges(
     graph: {
       ...graph,
       edges: newEdges,
+    },
+  };
+}
+
+// --- Subgraph Operations ---
+
+export function applyAddSubgraph(
+  graph: FlowchartGraph,
+  subgraph: SubgraphInput
+): GraphResult {
+  if (graph.subgraphs.some((sg) => sg.id === subgraph.id)) {
+    return {
+      ok: false,
+      error: `Error: Subgraph "${subgraph.id}" already exists. Use updateSubgraph to modify it.`,
+    };
+  }
+
+  const nodeIds = new Set(graph.nodes.map((n) => n.id));
+  for (const nid of subgraph.nodeIds) {
+    if (!nodeIds.has(nid)) {
+      return {
+        ok: false,
+        error: `Error: Node "${nid}" not found. Add it first with addNodes.`,
+      };
+    }
+  }
+
+  const newSubgraph: GraphSubgraph = {
+    id: subgraph.id,
+    label: subgraph.label,
+    nodeIds: subgraph.nodeIds,
+  };
+
+  return {
+    ok: true,
+    graph: {
+      ...graph,
+      subgraphs: [...graph.subgraphs, newSubgraph],
+    },
+  };
+}
+
+export function applyRemoveSubgraph(
+  graph: FlowchartGraph,
+  subgraphId: string
+): GraphResult {
+  if (!graph.subgraphs.some((sg) => sg.id === subgraphId)) {
+    const available = graph.subgraphs.map((sg) => sg.id).join(", ");
+    return {
+      ok: false,
+      error: `Error: Subgraph "${subgraphId}" not found. Current subgraphs: ${available || "(none)"}`,
+    };
+  }
+
+  return {
+    ok: true,
+    graph: {
+      ...graph,
+      subgraphs: graph.subgraphs
+        .filter((sg) => sg.id !== subgraphId)
+        .map((sg) =>
+          sg.parentSubgraph === subgraphId
+            ? { ...sg, parentSubgraph: undefined }
+            : sg
+        ),
+    },
+  };
+}
+
+export function applyUpdateSubgraph(
+  graph: FlowchartGraph,
+  update: SubgraphUpdate
+): GraphResult {
+  const sgIndex = graph.subgraphs.findIndex((sg) => sg.id === update.id);
+  if (sgIndex === -1) {
+    const available = graph.subgraphs.map((sg) => sg.id).join(", ");
+    return {
+      ok: false,
+      error: `Error: Subgraph "${update.id}" not found. Current subgraphs: ${available || "(none)"}`,
+    };
+  }
+
+  if (update.addNodeIds) {
+    const nodeIds = new Set(graph.nodes.map((n) => n.id));
+    for (const nid of update.addNodeIds) {
+      if (!nodeIds.has(nid)) {
+        return {
+          ok: false,
+          error: `Error: Node "${nid}" not found. Add it first with addNodes.`,
+        };
+      }
+    }
+  }
+
+  const existing = graph.subgraphs[sgIndex];
+  const currentNodeIds = new Set(existing.nodeIds);
+
+  if (update.addNodeIds) {
+    for (const nid of update.addNodeIds) currentNodeIds.add(nid);
+  }
+  if (update.removeNodeIds) {
+    for (const nid of update.removeNodeIds) currentNodeIds.delete(nid);
+  }
+
+  const updated: GraphSubgraph = {
+    ...existing,
+    ...(update.label !== undefined && { label: update.label }),
+    nodeIds: Array.from(currentNodeIds),
+  };
+
+  return {
+    ok: true,
+    graph: {
+      ...graph,
+      subgraphs: graph.subgraphs.map((sg) =>
+        sg.id === update.id ? updated : sg
+      ),
     },
   };
 }

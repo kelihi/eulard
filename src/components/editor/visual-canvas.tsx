@@ -271,8 +271,10 @@ export function VisualCanvas() {
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
       if (isLocked) return;
+      // Skip context menu for subgraph group nodes
+      const nodeData = node.data as { label?: string; isSubgraph?: boolean } | undefined;
+      if (nodeData?.isSubgraph) return;
       event.preventDefault();
-      const nodeData = node.data as { label?: string } | undefined;
       setContextMenu({
         nodeId: node.id,
         nodeLabel: (nodeData?.label as string) ?? node.id,
@@ -329,6 +331,13 @@ export function VisualCanvas() {
         edges: graphRef.current.edges.filter(
           (e) => e.source !== nodeId && e.target !== nodeId
         ),
+        // Remove deleted node from any subgraph membership
+        subgraphs: graphRef.current.subgraphs
+          .map((sg) => ({
+            ...sg,
+            nodeIds: sg.nodeIds.filter((nid) => nid !== nodeId),
+          }))
+          .filter((sg) => sg.nodeIds.length > 0),
       };
       syncGraphToCode(updatedGraph);
       // Update React Flow state immediately

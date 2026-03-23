@@ -254,6 +254,23 @@ function CircleNode({ data, selected }: NodeProps) {
   );
 }
 
+function SubgraphNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as FlowNodeData;
+  return (
+    <div
+      className={`rounded-lg border-2 border-dashed min-w-[200px] min-h-[100px] w-full h-full ${
+        selected
+          ? "border-[var(--primary)] bg-[var(--primary)]/5"
+          : "border-[var(--border)] bg-[var(--muted)]/30 hover:border-[var(--muted-foreground)]/50"
+      } transition-all duration-150`}
+    >
+      <div className="px-3 py-1.5 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wide border-b border-dashed border-inherit">
+        <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+      </div>
+    </div>
+  );
+}
+
 export const customNodeTypes = {
   default: DefaultNode,
   decision: DecisionNode,
@@ -261,4 +278,5 @@ export const customNodeTypes = {
   subroutine: SubroutineNode,
   cylinder: CylinderNode,
   circle: CircleNode,
+  subgraph: SubgraphNode,
 };

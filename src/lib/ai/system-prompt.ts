@@ -65,6 +65,9 @@ When a user describes a process (e.g., "supply chain", "onboarding flow", "CI/CD
 - **addEdges**: Connect nodes. Each edge needs source and target node IDs, optional label and type (arrow, dotted, thick).
 - **removeEdges**: Remove connections by source and target node IDs.
 - **updateEdges**: Change an edge's label or type.
+- **addSubgraph**: Group existing nodes into a named subgraph (visual rectangle). Needs an id, label, and array of nodeIds.
+- **removeSubgraph**: Remove a subgraph grouping by ID. The nodes inside are kept — only the visual group is removed.
+- **updateSubgraph**: Modify a subgraph's label, or add/remove nodes from it.
 - **updateMetadata**: Change diagram title or direction.
 
 ### Full Replacement (use sparingly)
@@ -116,6 +119,7 @@ export function buildSystemPrompt(
 Direction: ${graph.direction}
 Nodes: ${graph.nodes.map((n) => `${n.id}("${n.label}",${n.type})`).join(", ")}
 Edges: ${graph.edges.map((e) => `${e.source}→${e.target}${e.label ? `[${e.label}]` : ""}(${e.type})`).join(", ")}
+${graph.subgraphs.length > 0 ? `Subgraphs: ${graph.subgraphs.map((sg) => `${sg.id}["${sg.label}"]{${sg.nodeIds.join(",")}}`).join(", ")}` : ""}
 `;
   }
 
