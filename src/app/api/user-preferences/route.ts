@@ -26,12 +26,14 @@ export async function PUT(request: Request) {
 
   const body = await request.json();
 
-  // Validate sidebar shortcut if provided
-  if (body.sidebarToggleShortcut !== undefined) {
-    const shortcut = body.sidebarToggleShortcut;
-    if (typeof shortcut !== "string" || shortcut.length === 0 || shortcut.length > 50) {
-      log.done(400, "invalid sidebar shortcut");
-      return NextResponse.json({ error: "Invalid shortcut" }, { status: 400 });
+  // Validate shortcuts if provided
+  for (const key of ["sidebarToggleShortcut", "codeToggleShortcut", "chatToggleShortcut"] as const) {
+    if (body[key] !== undefined) {
+      const shortcut = body[key];
+      if (typeof shortcut !== "string" || shortcut.length === 0 || shortcut.length > 50) {
+        log.done(400, `invalid ${key}`);
+        return NextResponse.json({ error: "Invalid shortcut" }, { status: 400 });
+      }
     }
   }
 
