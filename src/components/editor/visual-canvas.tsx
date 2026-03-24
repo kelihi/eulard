@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   applyNodeChanges,
@@ -270,8 +271,10 @@ export function VisualCanvas() {
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
       if (isLocked) return;
+      // Skip context menu for subgraph group nodes
+      const nodeData = node.data as { label?: string; isSubgraph?: boolean } | undefined;
+      if (nodeData?.isSubgraph) return;
       event.preventDefault();
-      const nodeData = node.data as { label?: string } | undefined;
       setContextMenu({
         nodeId: node.id,
         nodeLabel: (nodeData?.label as string) ?? node.id,
@@ -328,6 +331,23 @@ export function VisualCanvas() {
         edges: graphRef.current.edges.filter(
           (e) => e.source !== nodeId && e.target !== nodeId
         ),
+        // Remove deleted node from any subgraph membership and clear orphaned parentSubgraph refs
+        subgraphs: (() => {
+          const updated = graphRef.current!.subgraphs.map((sg) => ({
+            ...sg,
+            nodeIds: sg.nodeIds.filter((nid) => nid !== nodeId),
+          }));
+          const removedSgIds = new Set(
+            updated.filter((sg) => sg.nodeIds.length === 0).map((sg) => sg.id)
+          );
+          return updated
+            .filter((sg) => sg.nodeIds.length > 0)
+            .map((sg) =>
+              sg.parentSubgraph && removedSgIds.has(sg.parentSubgraph)
+                ? { ...sg, parentSubgraph: undefined }
+                : sg
+            );
+        })(),
       };
       syncGraphToCode(updatedGraph);
       // Update React Flow state immediately
@@ -407,12 +427,15 @@ export function VisualCanvas() {
         panOnScroll
         proOptions={{ hideAttribution: true }}
       >
-        <Background />
-        <Controls />
+        <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--muted-foreground)" style={{ opacity: 0.3 }} />
+        <Controls showInteractive={false} />
         <MiniMap
           nodeStrokeColor="var(--border)"
-          nodeColor="var(--background)"
-          maskColor="rgba(0,0,0,0.1)"
+          nodeColor="var(--muted)"
+          maskColor="rgba(0,0,0,0.08)"
+          style={{ borderRadius: 8 }}
+          pannable
+          zoomable
         />
       </ReactFlow>
       {contextMenu && !isLocked && (

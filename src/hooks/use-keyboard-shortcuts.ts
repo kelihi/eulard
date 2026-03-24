@@ -5,10 +5,14 @@ import { useDiagramStore } from "@/stores/diagram-store";
 
 interface KeyboardShortcutsOptions {
   onToggleSidebar?: () => void;
+  onToggleCode?: () => void;
+  onToggleChat?: () => void;
 }
 
 /** Default sidebar toggle shortcut: Cmd+B (Mac) / Ctrl+B (Windows/Linux) */
 const DEFAULT_SIDEBAR_SHORTCUT = "mod+b";
+const DEFAULT_CODE_SHORTCUT = "mod+shift+e";
+const DEFAULT_CHAT_SHORTCUT = "mod+/";
 
 /**
  * Check if a keyboard event matches a shortcut string.
@@ -73,14 +77,16 @@ export function formatShortcut(shortcut: string): string {
   return [...labels, displayKey].join("+");
 }
 
-export function useKeyboardShortcuts({ onToggleSidebar }: KeyboardShortcutsOptions = {}) {
+export function useKeyboardShortcuts({ onToggleSidebar, onToggleCode, onToggleChat }: KeyboardShortcutsOptions = {}) {
   const saveDiagram = useDiagramStore((s) => s.saveDiagram);
   const undo = useDiagramStore((s) => s.undo);
   const redo = useDiagramStore((s) => s.redo);
 
   const [sidebarShortcut, setSidebarShortcut] = useState(DEFAULT_SIDEBAR_SHORTCUT);
+  const [codeShortcut, setCodeShortcut] = useState(DEFAULT_CODE_SHORTCUT);
+  const [chatShortcut, setChatShortcut] = useState(DEFAULT_CHAT_SHORTCUT);
 
-  // Load custom sidebar shortcut from user preferences
+  // Load custom shortcuts from user preferences
   useEffect(() => {
     fetch("/api/user-preferences")
       .then((r) => {
@@ -90,6 +96,12 @@ export function useKeyboardShortcuts({ onToggleSidebar }: KeyboardShortcutsOptio
       .then((data) => {
         if (data?.sidebarToggleShortcut) {
           setSidebarShortcut(data.sidebarToggleShortcut);
+        }
+        if (data?.codeToggleShortcut) {
+          setCodeShortcut(data.codeToggleShortcut);
+        }
+        if (data?.chatToggleShortcut) {
+          setChatShortcut(data.chatToggleShortcut);
         }
       })
       .catch(() => {});
@@ -103,6 +115,24 @@ export function useKeyboardShortcuts({ onToggleSidebar }: KeyboardShortcutsOptio
     };
     window.addEventListener("sidebar-shortcut-changed", handler);
     return () => window.removeEventListener("sidebar-shortcut-changed", handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (detail) setCodeShortcut(detail);
+    };
+    window.addEventListener("code-shortcut-changed", handler);
+    return () => window.removeEventListener("code-shortcut-changed", handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (detail) setChatShortcut(detail);
+    };
+    window.addEventListener("chat-shortcut-changed", handler);
+    return () => window.removeEventListener("chat-shortcut-changed", handler);
   }, []);
 
   const handleKeyDown = useCallback(
@@ -131,9 +161,24 @@ export function useKeyboardShortcuts({ onToggleSidebar }: KeyboardShortcutsOptio
       if (onToggleSidebar && matchesShortcut(e, sidebarShortcut)) {
         e.preventDefault();
         onToggleSidebar();
+        return;
+      }
+
+      // Code editor toggle
+      if (onToggleCode && matchesShortcut(e, codeShortcut)) {
+        e.preventDefault();
+        onToggleCode();
+        return;
+      }
+
+      // AI Chat toggle
+      if (onToggleChat && matchesShortcut(e, chatShortcut)) {
+        e.preventDefault();
+        onToggleChat();
+        return;
       }
     },
-    [saveDiagram, undo, redo, onToggleSidebar, sidebarShortcut]
+    [saveDiagram, undo, redo, onToggleSidebar, sidebarShortcut, onToggleCode, codeShortcut, onToggleChat, chatShortcut]
   );
 
   useEffect(() => {

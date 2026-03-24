@@ -3,6 +3,7 @@ import type {
   FlowchartDirection,
   GraphNode,
   GraphEdge,
+  GraphSubgraph,
   MermaidNodeType,
   MermaidEdgeType,
 } from "@/types/graph";
@@ -27,22 +28,50 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
 
   const nodes = new Map<string, GraphNode>();
   const edges: GraphEdge[] = [];
+  const subgraphs: GraphSubgraph[] = [];
   let edgeCounter = 0;
+
+  // Stack to track nested subgraph parsing
+  const subgraphStack: { id: string; label: string; nodeIds: string[]; parentId?: string }[] = [];
 
   // Process remaining lines
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i];
 
-    // Skip comments, subgraph, end, classDef, style, click directives
+    // Skip comments, classDef, style, click directives
     if (
       line.startsWith("%%") ||
-      line.startsWith("subgraph") ||
-      line === "end" ||
       line.startsWith("classDef") ||
       line.startsWith("style") ||
       line.startsWith("click") ||
       line.startsWith("linkStyle")
     ) {
+      continue;
+    }
+
+    // Parse subgraph opening: subgraph ID[Label] or subgraph ID
+    const subgraphMatch = line.match(/^subgraph\s+(\S+?)(?:\s*\[(.+?)\])?\s*$/);
+    if (subgraphMatch) {
+      const sgId = subgraphMatch[1];
+      const sgLabel = subgraphMatch[2] ?? sgId;
+      const parentId = subgraphStack.length > 0
+        ? subgraphStack[subgraphStack.length - 1].id
+        : undefined;
+      subgraphStack.push({ id: sgId, label: sgLabel, nodeIds: [], parentId });
+      continue;
+    }
+
+    // Parse subgraph closing
+    if (line === "end") {
+      const completed = subgraphStack.pop();
+      if (completed) {
+        subgraphs.push({
+          id: completed.id,
+          label: completed.label,
+          nodeIds: completed.nodeIds,
+          parentSubgraph: completed.parentId,
+        });
+      }
       continue;
     }
 
@@ -59,16 +88,35 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
         label: edgeResult.label,
         type: edgeResult.edgeType,
       });
+      // Track nodes inside the current subgraph
+      if (subgraphStack.length > 0) {
+        const current = subgraphStack[subgraphStack.length - 1];
+        if (!current.nodeIds.includes(edgeResult.source.id)) {
+          current.nodeIds.push(edgeResult.source.id);
+        }
+        if (!current.nodeIds.includes(edgeResult.target.id)) {
+          current.nodeIds.push(edgeResult.target.id);
+        }
+      }
       continue;
     }
 
     // Try to parse as standalone node definition: A[Label], B{Decision}, etc.
     const nodeResult = parseNodeDef(line);
-    if (nodeResult && !nodes.has(nodeResult.id)) {
-      nodes.set(nodeResult.id, {
-        ...nodeResult,
-        position: { x: 0, y: 0 },
-      });
+    if (nodeResult) {
+      if (!nodes.has(nodeResult.id)) {
+        nodes.set(nodeResult.id, {
+          ...nodeResult,
+          position: { x: 0, y: 0 },
+        });
+      }
+      // Track node inside the current subgraph
+      if (subgraphStack.length > 0) {
+        const current = subgraphStack[subgraphStack.length - 1];
+        if (!current.nodeIds.includes(nodeResult.id)) {
+          current.nodeIds.push(nodeResult.id);
+        }
+      }
     }
   }
 
@@ -77,6 +125,7 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
     direction,
     nodes: Array.from(nodes.values()),
     edges,
+    subgraphs,
   };
 }
 

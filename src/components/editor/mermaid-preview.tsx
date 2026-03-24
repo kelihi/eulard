@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
 import type { DiagramStyles } from "@/types/graph";
+import { getMermaidInitConfig, applyMermaidTheme } from "@/lib/mermaid-theme";
 import {
   ZoomIn,
   ZoomOut,
@@ -16,23 +17,21 @@ import {
 
 let mermaidInstance: typeof import("mermaid") | null = null;
 let renderCounter = 0;
+let lastThemeDark: boolean | null = null;
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5;
 const ZOOM_STEP = 0.25;
 
 async function getMermaid() {
-  if (!mermaidInstance) {
+  const currentDark = typeof window !== "undefined"
+    ? window.matchMedia("(prefers-color-scheme: dark)").matches
+    : false;
+
+  if (!mermaidInstance || lastThemeDark !== currentDark) {
     mermaidInstance = await import("mermaid");
-    mermaidInstance.default.initialize({
-      startOnLoad: false,
-      securityLevel: "strict",
-      theme: "default",
-      flowchart: {
-        htmlLabels: true,
-        useMaxWidth: false,
-      },
-    });
+    mermaidInstance.default.initialize(getMermaidInitConfig());
+    lastThemeDark = currentDark;
   }
   return mermaidInstance.default;
 }
@@ -288,6 +287,19 @@ export function MermaidPreview() {
     applySectionVisibility(sections);
   }, [sections, applySectionVisibility]);
 
+  // Re-init mermaid and re-render when system theme changes
+  const [, setThemeTick] = useState(0);
+  useEffect(() => {
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => {
+      // Force mermaid re-init on next render
+      lastThemeDark = null;
+      setThemeTick((t) => t + 1);
+    };
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
   // Mermaid render effect
   useEffect(() => {
     const generation = ++generationRef.current;
@@ -329,14 +341,19 @@ export function MermaidPreview() {
           // Re-apply section visibility to the newly rendered SVG
           applySectionVisibility(sectionsRef.current);
 
-          // Apply style overrides to the rendered SVG
+          // Apply base theme CSS to the rendered SVG
           const svgEl = containerRef.current.querySelector("svg");
-          if (svgEl && styleOverridesJson) {
-            try {
-              const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
-              applyStylesToSvg(svgEl, styles);
-            } catch {
-              // ignore invalid JSON
+          if (svgEl) {
+            applyMermaidTheme(svgEl as SVGSVGElement);
+
+            // Apply user style overrides on top of the base theme
+            if (styleOverridesJson) {
+              try {
+                const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
+                applyStylesToSvg(svgEl as SVGSVGElement, styles);
+              } catch {
+                // ignore invalid JSON
+              }
             }
           }
 

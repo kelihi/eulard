@@ -8,6 +8,9 @@ import {
   addEdgesSchema,
   removeEdgesSchema,
   updateEdgesSchema,
+  addSubgraphSchema,
+  removeSubgraphSchema,
+  updateSubgraphSchema,
   replaceDiagramSchema,
   updateMetadataSchema,
   exportDiagramSchema,
@@ -228,6 +231,21 @@ export async function POST(request: Request) {
       description:
         "Update edge properties (label, type/style). Use when the user asks to change arrow labels or styles.",
       parameters: updateEdgesSchema,
+    }),
+    addSubgraph: tool({
+      description:
+        "Group existing nodes into a named subgraph (visual rectangle). Use when the user asks to group, section, or organize nodes into a visual container.",
+      parameters: addSubgraphSchema,
+    }),
+    removeSubgraph: tool({
+      description:
+        "Remove a subgraph grouping by ID. The nodes inside are kept — only the visual group is removed.",
+      parameters: removeSubgraphSchema,
+    }),
+    updateSubgraph: tool({
+      description:
+        "Update a subgraph's label, or add/remove nodes from it. Use when the user asks to rename a group or move nodes between groups.",
+      parameters: updateSubgraphSchema,
     }),
     replaceDiagram: tool({
       description:
