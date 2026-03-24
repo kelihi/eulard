@@ -13,7 +13,13 @@ export default function Home() {
 
       // Check for existing diagrams first
       const listRes = await fetch("/api/diagrams");
-      if (!listRes.ok) return; // Will redirect to login via middleware
+      if (!listRes.ok) {
+        // Session is invalid/expired — redirect to login to re-authenticate
+        if (listRes.status === 401) {
+          window.location.href = "/login";
+        }
+        return;
+      }
       const diagrams = await listRes.json();
 
       if (diagrams.length > 0) {
