@@ -75,7 +75,12 @@ export default function EditorPage() {
     setLoading(true);
     loadDiagram(id)
       .then(() => setLoading(false))
-      .catch(() => {
+      .catch((err) => {
+        // If the session is expired/invalid, redirect to login
+        if (err?.message?.includes("401")) {
+          window.location.href = "/login";
+          return;
+        }
         setError("Failed to load diagram. It may have been deleted or you don't have access.");
         setLoading(false);
       });
