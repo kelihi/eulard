@@ -220,6 +220,20 @@ export async function initializeDatabase(): Promise<void> {
     END $$;
   `);
 
+  // --- Diagram version history (persistent undo) ---
+  await query(`
+    CREATE TABLE IF NOT EXISTS diagram_versions (
+      id SERIAL PRIMARY KEY,
+      diagram_id TEXT NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
+      patch JSONB NOT NULL,
+      inverse_patch JSONB NOT NULL,
+      source TEXT NOT NULL DEFAULT 'user' CHECK (source IN ('user', 'ai', 'auto')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await query("CREATE INDEX IF NOT EXISTS idx_diagram_versions_diagram ON diagram_versions(diagram_id)");
+  await query("CREATE INDEX IF NOT EXISTS idx_diagram_versions_diagram_id ON diagram_versions(diagram_id, id ASC)");
+
 }
 
 // --- Users ---
@@ -942,5 +956,50 @@ export async function setUserPreference(
   }
 }
 
+
+// --- Diagram Versions (persistent undo history) ---
+
+export interface DiagramVersionRow {
+  id: number;
+  diagram_id: string;
+  patch: unknown;
+  inverse_patch: unknown;
+  source: string;
+  created_at: string;
+}
+
+const MAX_VERSIONS_PER_DIAGRAM = 100;
+
+export async function createDiagramVersion(
+  diagramId: string,
+  patch: unknown,
+  inversePatch: unknown,
+  source: string = "user"
+): Promise<void> {
+  await query(
+    "INSERT INTO diagram_versions (diagram_id, patch, inverse_patch, source) VALUES ($1, $2, $3, $4)",
+    [diagramId, JSON.stringify(patch), JSON.stringify(inversePatch), source]
+  );
+  // Prune old versions beyond the limit
+  await query(
+    `DELETE FROM diagram_versions WHERE diagram_id = $1 AND id NOT IN (
+      SELECT id FROM diagram_versions WHERE diagram_id = $1 ORDER BY id DESC LIMIT $2
+    )`,
+    [diagramId, MAX_VERSIONS_PER_DIAGRAM]
+  );
+}
+
+export async function listDiagramVersions(
+  diagramId: string
+): Promise<DiagramVersionRow[]> {
+  return query<DiagramVersionRow>(
+    'SELECT id, diagram_id, patch, inverse_patch, source, created_at FROM diagram_versions WHERE diagram_id = $1 ORDER BY id ASC',
+    [diagramId]
+  );
+}
+
+export async function clearDiagramVersions(diagramId: string): Promise<void> {
+  await query("DELETE FROM diagram_versions WHERE diagram_id = $1", [diagramId]);
+}
 
 export default getPool;
