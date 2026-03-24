@@ -1,0 +1,3 @@
+# Playwright auth state files (generated, contain session tokens)
+*.json
+!.gitkeep

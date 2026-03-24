@@ -6,7 +6,12 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "local:up": "./scripts/local-up.sh",
+    "local:up:native": "./scripts/local-up.sh --native",
+    "local:seed": "node scripts/seed-test-users.js"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.0",
@@ -36,6 +41,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4.1.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/dagre": "^0.7.54",
