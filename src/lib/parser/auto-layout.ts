@@ -92,20 +92,8 @@ export function autoLayout(graph: FlowchartGraph): FlowchartGraph {
     nodes: graph.nodes.map((node) => {
       const dagreNode = g.node(node.id);
       const size = nodeSizes.get(node.id) ?? { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT };
-      // For nodes inside subgraphs, compute position relative to subgraph parent
-      const parentSg = nodeToSubgraph.get(node.id);
-      if (parentSg) {
-        const parentNode = g.node(parentSg);
-        if (parentNode) {
-          return {
-            ...node,
-            position: {
-              x: dagreNode.x - parentNode.x + (parentNode.width ?? 0) / 2 - size.width / 2,
-              y: dagreNode.y - parentNode.y + (parentNode.height ?? 0) / 2 - size.height / 2 + 30, // offset for label
-            },
-          };
-        }
-      }
+      // Return absolute top-left positions for all nodes (including subgraph children).
+      // graphToReactFlow handles the conversion to parent-relative positions.
       return {
         ...node,
         position: {

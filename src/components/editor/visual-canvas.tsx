@@ -331,13 +331,23 @@ export function VisualCanvas() {
         edges: graphRef.current.edges.filter(
           (e) => e.source !== nodeId && e.target !== nodeId
         ),
-        // Remove deleted node from any subgraph membership
-        subgraphs: graphRef.current.subgraphs
-          .map((sg) => ({
+        // Remove deleted node from any subgraph membership and clear orphaned parentSubgraph refs
+        subgraphs: (() => {
+          const updated = graphRef.current!.subgraphs.map((sg) => ({
             ...sg,
             nodeIds: sg.nodeIds.filter((nid) => nid !== nodeId),
-          }))
-          .filter((sg) => sg.nodeIds.length > 0),
+          }));
+          const removedSgIds = new Set(
+            updated.filter((sg) => sg.nodeIds.length === 0).map((sg) => sg.id)
+          );
+          return updated
+            .filter((sg) => sg.nodeIds.length > 0)
+            .map((sg) =>
+              sg.parentSubgraph && removedSgIds.has(sg.parentSubgraph)
+                ? { ...sg, parentSubgraph: undefined }
+                : sg
+            );
+        })(),
       };
       syncGraphToCode(updatedGraph);
       // Update React Flow state immediately
