@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
-  getBezierPath,
+  getSmoothStepPath,
   EdgeLabelRenderer,
   BaseEdge,
   type EdgeProps,
@@ -64,13 +64,14 @@ function EditableEdge({
   const [isHovered, setIsHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
     sourcePosition,
     targetPosition,
+    borderRadius: 8,
   });
 
   useEffect(() => {
