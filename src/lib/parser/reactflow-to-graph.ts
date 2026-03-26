@@ -59,6 +59,8 @@ export function reactFlowToGraph(
   rfNodes: Node<FlowNodeData>[],
   direction: FlowchartDirection
 ): FlowchartGraph {
+  const nodeMap = new Map(rfNodes.map((n) => [n.id, n]));
+
   return {
     diagramType: "flowchart",
     direction,
@@ -68,7 +70,7 @@ export function reactFlowToGraph(
         id: n.id,
         label: (n.data?.label as string) ?? n.id,
         type: ((n.data?.mermaidType as string) ?? "default") as MermaidNodeType,
-        position: n.position,
+        position: absolutePosition(n, nodeMap),
       })),
     edges: [], // edges are preserved from the existing graph
     subgraphs: [], // subgraphs are preserved from the existing graph
