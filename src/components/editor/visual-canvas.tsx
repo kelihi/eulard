@@ -197,31 +197,33 @@ export function VisualCanvas() {
           return;
         }
         // Fallback: render via Mermaid SVG directly
-        try {
-          const mermaid = (await import("mermaid")).default;
-          mermaid.initialize(getMermaidInitConfig());
-          await mermaid.parse(code);
-          const id = `canvas-fallback-${Date.now()}`;
-          const { svg } = await mermaid.render(id, code);
-          if (generation !== generationRef.current) return;
-          // Sanitize SVG
-          const DOMPurify = (await import("dompurify")).default;
-          const clean = DOMPurify.sanitize(svg, {
-            USE_PROFILES: { svg: true, svgFilters: true, html: true },
-            ADD_TAGS: ["foreignObject"],
-            HTML_INTEGRATION_POINTS: { foreignobject: true },
-            FORBID_TAGS: ["script", "iframe"],
-            FORBID_ATTR: ["onclick", "onload", "onerror", "onmouseover", "onfocus", "onblur"],
-          });
-          setSvgFallback(clean);
-          setNodes([]);
-          setEdges([]);
-        } catch {
-          // If Mermaid can't render either, show nothing
-          setSvgFallback(null);
-          setNodes([]);
-          setEdges([]);
-        }
+        (async () => {
+          try {
+            const mermaid = (await import("mermaid")).default;
+            mermaid.initialize(getMermaidInitConfig());
+            await mermaid.parse(code);
+            const id = `canvas-fallback-${Date.now()}`;
+            const { svg } = await mermaid.render(id, code);
+            if (generation !== generationRef.current) return;
+            // Sanitize SVG
+            const DOMPurify = (await import("dompurify")).default;
+            const clean = DOMPurify.sanitize(svg, {
+              USE_PROFILES: { svg: true, svgFilters: true, html: true },
+              ADD_TAGS: ["foreignObject"],
+              HTML_INTEGRATION_POINTS: { foreignobject: true },
+              FORBID_TAGS: ["script", "iframe"],
+              FORBID_ATTR: ["onclick", "onload", "onerror", "onmouseover", "onfocus", "onblur"],
+            });
+            setSvgFallback(clean);
+            setNodes([]);
+            setEdges([]);
+          } catch {
+            // If Mermaid can't render either, show nothing
+            setSvgFallback(null);
+            setNodes([]);
+            setEdges([]);
+          }
+        })();
         return;
       }
       setSvgFallback(null);
