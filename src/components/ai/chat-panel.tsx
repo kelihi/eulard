@@ -781,12 +781,24 @@ async function handleToolCall(toolCall: { toolName: string; args: unknown }): Pr
     try {
       const mermaid = (await import("mermaid")).default;
       await mermaid.parse(args.code);
+
+      // Check if the visual canvas can render this interactively
+      const graph = mermaidToGraph(args.code);
+      if (!graph && maxRetries > 0) {
+        diagramRetryCount++;
+        if (diagramRetryCount >= maxRetries) {
+          // Exhausted retries — accept the code and let SVG fallback handle it
+          diagramRetryCount = 0;
+          useDiagramStore.getState().setCode(args.code);
+          return "Diagram replaced (read-only preview — visual canvas could not parse it interactively).";
+        }
+        return `Error (attempt ${diagramRetryCount}/${maxRetries}): The mermaid syntax is valid but the visual canvas cannot render it interactively. The visual canvas only supports flowchart syntax (graph TD/LR/BT/RL with nodes and edges). Please rewrite the diagram using flowchart syntax. Use subgraphs for grouping, simple node shapes ([], (), {}, (()), [()], etc.), and --> / --- style edges. Do NOT use sequence diagrams, class diagrams, state diagrams, ER diagrams, or other non-flowchart types.`;
+      }
+
       useDiagramStore.getState().setCode(args.code);
       diagramRetryCount = 0;
 
-      // Warn if this was a flowchart — prefer granular tools
-      const isFlowchart = mermaidToGraph(args.code) !== null;
-      if (isFlowchart) {
+      if (graph) {
         return "Diagram replaced. Tip: For flowchart edits, prefer addNodes/addEdges/etc. for incremental changes.";
       }
       return "Diagram replaced successfully.";
