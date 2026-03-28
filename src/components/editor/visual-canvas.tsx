@@ -79,6 +79,7 @@ export function VisualCanvas() {
 
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
+  const [canvasWarning, setCanvasWarning] = useState<string | null>(null);
   const graphRef = useRef<FlowchartGraph | null>(null);
   const generationRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -186,7 +187,17 @@ export function VisualCanvas() {
       if (isDraggingRef.current) return;
 
       const graph = mermaidToGraph(code);
-      if (!graph) return;
+      if (!graph) {
+        setCanvasWarning(
+          code.trim()
+            ? "This diagram uses syntax not yet supported by the visual canvas. Switch to Code + Preview mode for full rendering."
+            : null
+        );
+        setNodes([]);
+        setEdges([]);
+        return;
+      }
+      setCanvasWarning(null);
 
       // Check if stored positions exist in the database
       let savedPositions: Record<string, { x: number; y: number }> | null = null;
@@ -421,6 +432,18 @@ export function VisualCanvas() {
 
   return (
     <div className="h-full w-full relative">
+      {canvasWarning && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center p-8">
+          <div className="text-center max-w-sm space-y-3">
+            <div className="w-12 h-12 mx-auto rounded-full bg-[var(--muted)] flex items-center justify-center">
+              <svg className="w-6 h-6 text-[var(--muted-foreground)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+            </div>
+            <p className="text-sm text-[var(--muted-foreground)] leading-relaxed">{canvasWarning}</p>
+          </div>
+        </div>
+      )}
       {isLocked && (
         <div className="absolute inset-0 z-10 bg-[var(--background)]/50 flex items-center justify-center">
           <span className="text-sm text-[var(--primary)] font-medium animate-pulse">

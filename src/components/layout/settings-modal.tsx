@@ -7,6 +7,7 @@ import {
   AI_MODELS,
   type AIModelId,
 } from "@/stores/ai-settings-store";
+import { RefreshCw } from "lucide-react";
 import { formatShortcut } from "@/hooks/use-keyboard-shortcuts";
 
 interface SettingsModalProps {
@@ -39,8 +40,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
 
   const aiMaxSteps = useAISettingsStore((s) => s.maxSteps);
   const aiModel = useAISettingsStore((s) => s.model);
+  const aiMaxAutoRetries = useAISettingsStore((s) => s.maxAutoRetries);
   const setAIMaxSteps = useAISettingsStore((s) => s.setMaxSteps);
   const setAIModel = useAISettingsStore((s) => s.setModel);
+  const setAIMaxAutoRetries = useAISettingsStore((s) => s.setMaxAutoRetries);
 
   useEffect(() => {
     if (open) {
@@ -461,6 +464,39 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </div>
               <p className="text-xs text-[var(--muted-foreground)] mt-1">
                 Default: 15. Recommended: 30+ for complex supply chain or ER diagrams.
+              </p>
+            </div>
+
+            {/* Max Auto-Retries Section */}
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium mb-2">
+                <RefreshCw className="w-3.5 h-3.5" />
+                Max Auto-Retries
+              </label>
+              <p className="text-xs text-[var(--muted-foreground)] mb-3">
+                When the AI generates diagram code that fails to parse, it will
+                automatically retry up to this many times. Set to 0 to disable.
+              </p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={0}
+                  max={20}
+                  value={aiMaxAutoRetries}
+                  onChange={(e) => setAIMaxAutoRetries(Number(e.target.value))}
+                  className="flex-1 accent-[var(--primary)]"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={20}
+                  value={aiMaxAutoRetries}
+                  onChange={(e) => setAIMaxAutoRetries(Number(e.target.value))}
+                  className="w-16 px-2 py-1 text-sm text-center rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                />
+              </div>
+              <p className="text-xs text-[var(--muted-foreground)] mt-1">
+                Default: 5. The AI will attempt to fix invalid syntax automatically.
               </p>
             </div>
 

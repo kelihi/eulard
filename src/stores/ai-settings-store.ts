@@ -12,16 +12,18 @@ const STORAGE_KEY = "eulard-ai-settings";
 export interface AISettings {
   maxSteps: number;
   model: AIModelId;
+  maxAutoRetries: number;
 }
 
 interface AISettingsStore extends AISettings {
   setMaxSteps: (maxSteps: number) => void;
   setModel: (model: AIModelId) => void;
+  setMaxAutoRetries: (maxAutoRetries: number) => void;
 }
 
 function loadSettings(): AISettings {
   if (typeof window === "undefined") {
-    return { maxSteps: 15, model: "claude-sonnet-4-6" };
+    return { maxSteps: 15, model: "claude-sonnet-4-6", maxAutoRetries: 5 };
   }
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -32,12 +34,13 @@ function loadSettings(): AISettings {
         model: AI_MODELS.some((m) => m.id === parsed.model)
           ? parsed.model
           : "claude-sonnet-4-6",
+        maxAutoRetries: typeof parsed.maxAutoRetries === "number" ? parsed.maxAutoRetries : 5,
       };
     }
   } catch {
     // ignore
   }
-  return { maxSteps: 15, model: "claude-sonnet-4-6" };
+  return { maxSteps: 15, model: "claude-sonnet-4-6", maxAutoRetries: 5 };
 }
 
 function persistSettings(settings: AISettings) {
@@ -60,5 +63,11 @@ export const useAISettingsStore = create<AISettingsStore>((set, get) => ({
   setModel: (model: AIModelId) => {
     set({ model });
     persistSettings({ ...get(), model });
+  },
+
+  setMaxAutoRetries: (maxAutoRetries: number) => {
+    const clamped = Math.max(0, Math.min(20, maxAutoRetries));
+    set({ maxAutoRetries: clamped });
+    persistSettings({ ...get(), maxAutoRetries: clamped });
   },
 }));
