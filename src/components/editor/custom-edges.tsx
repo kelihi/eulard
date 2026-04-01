@@ -67,6 +67,12 @@ function buildRoundedPath(
     const lenPrev = Math.sqrt(dxPrev * dxPrev + dyPrev * dyPrev);
     const lenNext = Math.sqrt(dxNext * dxNext + dyNext * dyNext);
 
+    // Skip degenerate zero-length segments
+    if (lenPrev === 0 || lenNext === 0) {
+      parts.push(`L ${curr.x} ${curr.y}`);
+      continue;
+    }
+
     // Clamp radius so it doesn't exceed half of either segment
     const r = Math.min(radius, lenPrev / 2, lenNext / 2);
 
