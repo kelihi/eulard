@@ -36,10 +36,33 @@ interface ContextMenuState {
   y: number;
 }
 
+/**
+ * Build a position map from React Flow nodes, converting child-relative
+ * positions back to absolute canvas coordinates.  Subgraph group nodes
+ * are excluded — their bounds are recomputed from children on each render.
+ */
 function buildPositionMap(nodes: Node[]): Record<string, { x: number; y: number }> {
   const map: Record<string, { x: number; y: number }> = {};
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+
+  function toAbsolute(n: Node): { x: number; y: number } {
+    let x = n.position.x;
+    let y = n.position.y;
+    let current = n;
+    while (current.parentId) {
+      const parent = nodeMap.get(current.parentId);
+      if (!parent) break;
+      x += parent.position.x;
+      y += parent.position.y;
+      current = parent;
+    }
+    return { x, y };
+  }
+
   for (const n of nodes) {
-    map[n.id] = { x: n.position.x, y: n.position.y };
+    // Skip subgraph group nodes — they are derived from child positions
+    if ((n.data as { isSubgraph?: boolean })?.isSubgraph) continue;
+    map[n.id] = toAbsolute(n);
   }
   return map;
 }

@@ -102,6 +102,8 @@ else
     --service-account="${SERVICE_ACCOUNT}" \
     --allow-unauthenticated \
     --add-cloudsql-instances="${CLOUDSQL_CONNECTION}" \
+    --vpc-connector=chassis-vpc-cx-prod \
+    --vpc-egress=private-ranges-only \
     --port=3000 \
     --cpu=1 \
     --memory=1Gi \
@@ -117,6 +119,8 @@ else
     --set-env-vars="DB_USER=eulard-app" \
     --set-env-vars="AUTH_GOOGLE_ALLOWED_DOMAINS=kelihi.com" \
     --set-env-vars="AUTH_TRUST_HOST=true" \
+    --set-env-vars="NEXTAUTH_URL=https://eulard.kelihi.com" \
+    --set-env-vars="AUTH_URL=https://eulard.kelihi.com" \
     --set-secrets="DB_PASSWORD=eulard-db-password-prod:latest" \
     --set-secrets="NEXTAUTH_SECRET=eulard-nextauth-secret-prod:latest" \
     --set-secrets="AUTH_GOOGLE_CLIENT_ID=eulard-google-oauth-client-id-prod:latest" \

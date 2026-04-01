@@ -2,7 +2,7 @@
 
 ## Git Workflow
 
-**Dev (autonomous/yolo mode):** Commit and push directly to `main`. GitHub Actions auto-deploys to dev. No PR needed. Use `/iterate` for the full loop (typecheck → commit → push → deploy).
+**Staging (autonomous/yolo mode):** Commit and push directly to `main`. GitHub Actions auto-deploys to staging. No PR needed. Use `/iterate` for the full loop (typecheck → commit → push → deploy).
 
 **Prod (requires approval):** Use `/release [major|minor|patch]` to cut a versioned release. This creates a PR from `main` → `stable` which requires 1 approval before merge. Merging auto-deploys to prod.
 
@@ -14,7 +14,8 @@
 
 | Env | URL | Branch | Deploy |
 |-----|-----|--------|--------|
-| Dev | https://eulard-dev-23815247728.us-central1.run.app | `main` | Auto on push |
+| Local | http://localhost:3000 | feature branches | `./scripts/local-up.sh` |
+| Staging | https://staging.eulard.kelihi.com | `main` | Auto on push |
 | Prod | https://eulard.kelihi.com | `stable` | Auto on PR merge |
 
 ## Stack
@@ -22,11 +23,11 @@
 - React Flow (visual canvas), Mermaid (diagram syntax)
 - Zustand (state), NextAuth v5 (auth), PostgreSQL (Cloud SQL)
 - Claude AI (diagram editing via tool calls)
-- Cloud Run (both envs), GitHub Actions CI/CD
+- Cloud Run (staging + prod), GitHub Actions CI/CD
 
 ## Key commands
-- `/iterate` — fast dev loop: typecheck → commit → push → deploy dev
+- `/iterate` — fast dev loop: typecheck → commit → push → deploy staging
 - `/validate` — run lint + typecheck + build locally
 - `/release` — cut versioned release with changelog + PR to stable
 - `/ship` — create PR to main with auto-merge
-- `/deploy` — full validation + deploy to dev
+- `/deploy` — full validation + deploy to staging

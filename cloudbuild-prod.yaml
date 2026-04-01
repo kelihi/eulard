@@ -21,7 +21,11 @@ steps:
     id: 'push-latest'
     waitFor: ['build']
 
+<<<<<<<< HEAD:cloudbuild-prod.yaml
   # Update Cloud Run prod service with the new image
+========
+  # Update Cloud Run dev service with the new image
+>>>>>>>> origin/stable:cloudbuild-dev.yaml
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:

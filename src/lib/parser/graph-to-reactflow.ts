@@ -142,6 +142,7 @@ export function graphToReactFlow(
       id: sg.id,
       type: "subgraph",
       position: { x: sgX, y: sgY },
+      zIndex: -1,
       data: {
         label: sg.label,
         mermaidType: "subgraph",
@@ -174,7 +175,7 @@ export function graphToReactFlow(
         onRenameNode,
         isLocked,
       },
-      ...(parentSgId ? { parentId: parentSgId } : {}),
+      ...(parentSgId ? { parentId: parentSgId, extent: "parent" as const } : {}),
     });
   }
 
