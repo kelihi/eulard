@@ -264,7 +264,7 @@ function SubgraphNode({ data, selected }: NodeProps) {
           : "border-[var(--border)] bg-[var(--muted)]/30 hover:border-[var(--muted-foreground)]/50"
       } transition-all duration-150`}
     >
-      <div className="px-3 py-1.5 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wide border-b border-dashed border-inherit">
+      <div className="px-3 py-1.5 text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wide border-b border-dashed border-inherit whitespace-normal break-words overflow-wrap-anywhere">
         <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
       </div>
     </div>

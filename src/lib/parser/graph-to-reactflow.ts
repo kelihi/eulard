@@ -117,7 +117,10 @@ export function graphToReactFlow(
     }
 
     const hasBounds = minX !== Infinity;
-    const sgWidth = hasBounds ? maxX - minX + PADDING * 2 : 300;
+    // Estimate title width: ~7.5px per uppercase character + tracking + padding
+    const titleWidth = sg.label.length * 7.5 + PADDING * 2 + 24;
+    const childBoundsWidth = hasBounds ? maxX - minX + PADDING * 2 : 300;
+    const sgWidth = Math.max(childBoundsWidth, titleWidth);
     const sgHeight = hasBounds ? maxY - minY + PADDING * 2 + LABEL_HEIGHT : 200;
     const sgX = hasBounds ? minX - PADDING : 0;
     const sgY = hasBounds ? minY - PADDING - LABEL_HEIGHT : 0;
