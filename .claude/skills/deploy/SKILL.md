@@ -45,8 +45,8 @@ cd ~/eulard && git push origin main
 cd ~/eulard
 SHA=$(git rev-parse --short HEAD)
 gcloud builds submit \
-  --config=cloudbuild-dev.yaml \
-  --substitutions="_TAG=dev-${SHA}" \
+  --config=cloudbuild-staging.yaml \
+  --substitutions="_TAG=staging-${SHA}" \
   --project=kelihi-ai-platform .
 ```
 

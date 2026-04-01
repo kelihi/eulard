@@ -84,8 +84,8 @@ Note: eulard currently has no required status checks on main, so auto-merge will
 
 **What happens next**:
 1. PR merges (no required checks currently)
-2. `deploy-dev.yml` triggers — builds + deploys to Cloud Run dev
-3. Dev site: https://dev.eulard.kelihi.com
+2. `staging.yml` triggers — builds + deploys to Cloud Run staging
+3. Staging site: https://staging.eulard.kelihi.com
 
 **If you need to check later**: `/prs`
 ```

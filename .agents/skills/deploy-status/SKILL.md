@@ -1,6 +1,6 @@
 # Skill: Deployment Status
 
-Check the current deployment status of Eulard Cloud Run services (dev and prod).
+Check the current deployment status of Eulard Cloud Run services (staging and prod).
 
 ## When to use
 - When the user asks "is it deployed?" or "what's running?"
@@ -13,8 +13,8 @@ Check the current deployment status of Eulard Cloud Run services (dev and prod).
 ### 1. Check service status for both environments
 
 ```bash
-echo "=== DEV (eulard-dev) ==="
-gcloud run services describe eulard-dev \
+echo "=== STAGING (eulard-staging) ==="
+gcloud run services describe eulard-staging \
   --project=kelihi-ai-platform \
   --region=us-central1 \
   --format="table(status.url, status.traffic.revisionName, status.traffic.percent, metadata.annotations['client.knative.dev/user-image'])" \
@@ -32,12 +32,12 @@ gcloud run services describe eulard-prod \
 ### 2. Health checks
 
 ```bash
-# Dev health
-DEV_URL=$(gcloud run services describe eulard-dev \
+# Staging health
+STAGING_URL=$(gcloud run services describe eulard-staging \
   --project=kelihi-ai-platform --region=us-central1 \
   --format="value(status.url)" 2>/dev/null)
-if [ -n "$DEV_URL" ]; then
-  echo "Dev health: $(curl -sf -o /dev/null -w '%{http_code}' "${DEV_URL}/api/healthz" || echo 'unreachable')"
+if [ -n "$STAGING_URL" ]; then
+  echo "Staging health: $(curl -sf -o /dev/null -w '%{http_code}' "${STAGING_URL}/api/healthz" || echo 'unreachable')"
 fi
 
 # Prod health
@@ -52,8 +52,8 @@ fi
 ### 3. Recent logs (if needed)
 
 ```bash
-# Dev logs
-gcloud run services logs read eulard-dev \
+# Staging logs
+gcloud run services logs read eulard-staging \
   --project=kelihi-ai-platform \
   --region=us-central1 \
   --limit=20
@@ -77,9 +77,9 @@ gcloud builds list \
 ### 5. List revisions (check rollback targets)
 
 ```bash
-# Dev revisions
+# Staging revisions
 gcloud run revisions list \
-  --service=eulard-dev \
+  --service=eulard-staging \
   --project=kelihi-ai-platform \
   --region=us-central1 \
   --limit=5
@@ -94,9 +94,9 @@ gcloud run revisions list \
 
 ## Key details
 
-| Setting | Dev | Prod |
+| Setting | Staging | Prod |
 |---|---|---|
-| Service name | `eulard-dev` | `eulard-prod` |
+| Service name | `eulard-staging` | `eulard-prod` |
 | GCP Project | `kelihi-ai-platform` | `kelihi-ai-platform` |
 | Region | `us-central1` | `us-central1` |
 | Cloud SQL | `chassis-db-dev` | `chassis-db-prod` |
@@ -109,10 +109,10 @@ If a deployment is broken, roll back to the previous revision:
 
 ```bash
 # List revisions to find the previous one
-gcloud run revisions list --service=eulard-dev --project=kelihi-ai-platform --region=us-central1 --limit=3
+gcloud run revisions list --service=eulard-staging --project=kelihi-ai-platform --region=us-central1 --limit=3
 
 # Roll back by routing traffic to the previous revision
-gcloud run services update-traffic eulard-dev \
+gcloud run services update-traffic eulard-staging \
   --to-revisions=REVISION_NAME=100 \
   --project=kelihi-ai-platform \
   --region=us-central1

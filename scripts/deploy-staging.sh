@@ -1,20 +1,16 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Eulard — Deploy to Cloud Run (dev)
-# Usage: ./scripts/deploy-dev.sh [--build-only | --deploy-only | --image TAG]
+# Eulard — Deploy to Cloud Run (staging)
+# Usage: ./scripts/deploy-staging.sh [--build-only | --deploy-only | --image TAG]
 #
-# This deploys eulard to a Cloud Run service for dev/testing.
-# Production remains on GKE (deployed via scripts/deploy.sh).
+# This deploys eulard to the staging Cloud Run service.
+# Staging is auto-deployed from main via GitHub Actions.
 #
 # Modes:
 #   (default)       Build image via Cloud Build, then deploy to Cloud Run
 #   --build-only    Build and push image only, skip deployment
 #   --deploy-only   Deploy using the latest image (skip build)
-#   --image TAG     Deploy a specific image tag (e.g., dev-abc1234)
-#
-# First-time setup:
-#   1. Run: tofu apply -var-file="environments/dev.tfvars" (creates the service)
-#   2. Or run this script (it will create the service if it doesn't exist)
+#   --image TAG     Deploy a specific image tag (e.g., staging-abc1234)
 #
 # Prerequisites:
 #   - gcloud CLI authenticated with access to kelihi-ai-platform
@@ -25,7 +21,7 @@ set -euo pipefail
 
 PROJECT="kelihi-ai-platform"
 REGION="us-central1"
-SERVICE="eulard-dev"
+SERVICE="eulard-staging"
 IMAGE_BASE="us-central1-docker.pkg.dev/${PROJECT}/eulard/eulard"
 CLOUDSQL_CONNECTION="kelihi-ai-platform:us-central1:chassis-db-dev"
 SERVICE_ACCOUNT="eulard-sa@kelihi-ai-platform.iam.gserviceaccount.com"
@@ -47,7 +43,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "============================================"
-echo "  Eulard Cloud Run Dev Deployment"
+echo "  Eulard Cloud Run Staging Deployment"
 echo "============================================"
 
 # ---- Resolve tag ----
@@ -57,7 +53,7 @@ elif [ "${DEPLOY_ONLY}" = true ]; then
   TAG="latest"
 else
   SHORT_SHA=$(git -C "${ROOT_DIR}" rev-parse --short HEAD 2>/dev/null || echo "local")
-  TAG="dev-${SHORT_SHA}"
+  TAG="staging-${SHORT_SHA}"
 fi
 
 # ---- Build ----
@@ -121,12 +117,14 @@ else
     --set-env-vars="DB_USER=eulard-app" \
     --set-env-vars="AUTH_GOOGLE_ALLOWED_DOMAINS=kelihi.com" \
     --set-env-vars="AUTH_TRUST_HOST=true" \
+    --set-env-vars="NEXTAUTH_URL=https://staging.eulard.kelihi.com" \
+    --set-env-vars="AUTH_URL=https://staging.eulard.kelihi.com" \
     --set-secrets="DB_PASSWORD=eulard-db-password-dev:latest" \
     --set-secrets="NEXTAUTH_SECRET=eulard-nextauth-secret-dev:latest" \
     --set-secrets="AUTH_GOOGLE_CLIENT_ID=eulard-google-oauth-client-id-dev:latest" \
     --set-secrets="AUTH_GOOGLE_CLIENT_SECRET=eulard-google-oauth-client-secret-dev:latest" \
     --set-secrets="ANTHROPIC_API_KEY=eulard-anthropic-api-key-dev:latest" \
-    --labels="environment=dev,managed-by=script" \
+    --labels="environment=staging,managed-by=script" \
     --quiet
 fi
 
@@ -142,5 +140,5 @@ URL=$(gcloud run services describe "${SERVICE}" \
 echo "==> Service URL: ${URL}"
 echo ""
 echo "==> Post-deployment:"
-echo "    1. Verify health: curl ${URL}/api/healthz"
+echo "    1. Verify health: curl https://staging.eulard.kelihi.com/api/healthz"
 echo "    2. Check logs:    gcloud run services logs read ${SERVICE} --project=${PROJECT} --region=${REGION} --limit=20"
