@@ -1,5 +1,5 @@
 steps:
-  # Build the container image with dev-specific and latest tags
+  # Build the container image with staging-specific and latest tags
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -21,14 +21,14 @@ steps:
     id: 'push-latest'
     waitFor: ['build']
 
-  # Update Cloud Run dev service with the new image
+  # Update Cloud Run staging service with the new image
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - 'run'
       - 'services'
       - 'update'
-      - 'eulard-dev'
+      - 'eulard-staging'
       - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:${_TAG}'
       - '--region=us-central1'
       - '--project=$PROJECT_ID'

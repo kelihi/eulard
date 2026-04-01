@@ -1,11 +1,11 @@
-name: Deploy Dev
+name: Deploy Staging
 
 on:
   push:
     branches: [main]
 
 concurrency:
-  group: deploy-dev
+  group: deploy-staging
   cancel-in-progress: true
 
 # NOTE: Workload Identity Federation must be configured in GCP.
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   deploy:
-    name: Build & Deploy to Dev
+    name: Build & Deploy to Staging
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,10 +36,10 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Submit Cloud Build (build + deploy dev)
+      - name: Submit Cloud Build (build + deploy staging)
         run: |
           gcloud builds submit \
-            --config=cloudbuild-dev.yaml \
-            --substitutions="_TAG=dev-${GITHUB_SHA::7}" \
+            --config=cloudbuild-staging.yaml \
+            --substitutions="_TAG=staging-${GITHUB_SHA::7}" \
             --project=kelihi-ai-platform \
             .

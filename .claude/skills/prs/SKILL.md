@@ -24,7 +24,7 @@ gh pr checks <number> --json name,state,conclusion --jq '.'
 ### 3. Recent Deploy Runs
 
 ```bash
-gh run list --workflow=deploy-dev.yml --limit 5 --json conclusion,displayTitle,createdAt,url
+gh run list --workflow=staging.yml --limit 5 --json conclusion,displayTitle,createdAt,url
 ```
 
 ### 4. Display Dashboard

@@ -49,10 +49,10 @@ No `--admin` needed since eulard has no branch protection on main.
 **Merged**: <head> → main
 
 **What happens next**:
-- `deploy-dev.yml` triggers — builds + deploys to Cloud Run dev (~5 min)
-- Dev site: https://dev.eulard.kelihi.com
+- `staging.yml` triggers — builds + deploys to Cloud Run staging (~5 min)
+- Staging site: https://staging.eulard.kelihi.com
 
-**Track deploy**: `gh run list --workflow=deploy-dev.yml --limit 1`
+**Track deploy**: `gh run list --workflow=staging.yml --limit 1`
 ```
 
 ## Edge Cases
