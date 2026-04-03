@@ -28,6 +28,7 @@ import { customEdgeTypes } from "./custom-edges";
 import { NodeContextMenu } from "./node-context-menu";
 import type { FlowchartGraph } from "@/types/graph";
 import type { MermaidNodeType } from "@/types/graph";
+import { getMermaidInitConfig, applyMermaidTheme } from "@/lib/mermaid-theme";
 
 interface ContextMenuState {
   nodeId: string;
@@ -79,10 +80,12 @@ export function VisualCanvas() {
 
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
+  const [svgFallback, setSvgFallback] = useState<string | null>(null);
   const graphRef = useRef<FlowchartGraph | null>(null);
   const generationRef = useRef(0);
   const isDraggingRef = useRef(false);
   const codeFromCanvasRef = useRef<string | null>(null);
+  const svgContainerRef = useRef<HTMLDivElement>(null);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
@@ -186,7 +189,44 @@ export function VisualCanvas() {
       if (isDraggingRef.current) return;
 
       const graph = mermaidToGraph(code);
-      if (!graph) return;
+      if (!graph) {
+        if (!code.trim()) {
+          setSvgFallback(null);
+          setNodes([]);
+          setEdges([]);
+          return;
+        }
+        // Fallback: render via Mermaid SVG directly
+        (async () => {
+          try {
+            const mermaid = (await import("mermaid")).default;
+            mermaid.initialize(getMermaidInitConfig());
+            await mermaid.parse(code);
+            const id = `canvas-fallback-${Date.now()}`;
+            const { svg } = await mermaid.render(id, code);
+            if (generation !== generationRef.current) return;
+            // Sanitize SVG
+            const DOMPurify = (await import("dompurify")).default;
+            const clean = DOMPurify.sanitize(svg, {
+              USE_PROFILES: { svg: true, svgFilters: true, html: true },
+              ADD_TAGS: ["foreignObject"],
+              HTML_INTEGRATION_POINTS: { foreignobject: true },
+              FORBID_TAGS: ["script", "iframe"],
+              FORBID_ATTR: ["onclick", "onload", "onerror", "onmouseover", "onfocus", "onblur"],
+            });
+            setSvgFallback(clean);
+            setNodes([]);
+            setEdges([]);
+          } catch {
+            // If Mermaid can't render either, show nothing
+            setSvgFallback(null);
+            setNodes([]);
+            setEdges([]);
+          }
+        })();
+        return;
+      }
+      setSvgFallback(null);
 
       // Check if stored positions exist in the database
       let savedPositions: Record<string, { x: number; y: number }> | null = null;
@@ -236,6 +276,15 @@ export function VisualCanvas() {
 
     return () => clearTimeout(timer);
   }, [code, positions, onRenameNode, isLocked, injectEdgeCallbacks]);
+
+  // Apply theme to SVG fallback when it changes
+  useEffect(() => {
+    if (!svgFallback || !svgContainerRef.current) return;
+    const svgEl = svgContainerRef.current.querySelector("svg");
+    if (svgEl) {
+      applyMermaidTheme(svgEl as SVGSVGElement);
+    }
+  }, [svgFallback]);
 
   // Re-inject edge callbacks when handleRenameEdge changes
   useEffect(() => {
@@ -428,39 +477,49 @@ export function VisualCanvas() {
           </span>
         </div>
       )}
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeContextMenu={onNodeContextMenu}
-        onPaneClick={onPaneClick}
-        onSelectionChange={onSelectionChange}
-        nodeTypes={customNodeTypes}
-        edgeTypes={customEdgeTypes}
-        fitView
-        nodesDraggable={!isLocked}
-        nodesConnectable={false}
-        elementsSelectable={!isLocked}
-        selectionOnDrag={!isLocked}
-        selectionMode={SelectionMode.Partial}
-        selectionKeyCode={null}
-        multiSelectionKeyCode="Shift"
-        panOnDrag={[1]}
-        panOnScroll
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--muted-foreground)" style={{ opacity: 0.3 }} />
-        <Controls showInteractive={false} />
-        <MiniMap
-          nodeStrokeColor="var(--border)"
-          nodeColor="var(--muted)"
-          maskColor="rgba(0,0,0,0.08)"
-          style={{ borderRadius: 8 }}
-          pannable
-          zoomable
-        />
-      </ReactFlow>
+      {svgFallback ? (
+        <div className="h-full w-full overflow-auto flex items-start justify-center p-4 bg-white dark:bg-[var(--muted)]">
+          <div
+            ref={svgContainerRef}
+            className="mermaid-preview"
+            dangerouslySetInnerHTML={{ __html: svgFallback }}
+          />
+        </div>
+      ) : (
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeContextMenu={onNodeContextMenu}
+          onPaneClick={onPaneClick}
+          onSelectionChange={onSelectionChange}
+          nodeTypes={customNodeTypes}
+          edgeTypes={customEdgeTypes}
+          fitView
+          nodesDraggable={!isLocked}
+          nodesConnectable={false}
+          elementsSelectable={!isLocked}
+          selectionOnDrag={!isLocked}
+          selectionMode={SelectionMode.Partial}
+          selectionKeyCode={null}
+          multiSelectionKeyCode="Shift"
+          panOnDrag={[1]}
+          panOnScroll
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--muted-foreground)" style={{ opacity: 0.3 }} />
+          <Controls showInteractive={false} />
+          <MiniMap
+            nodeStrokeColor="var(--border)"
+            nodeColor="var(--muted)"
+            maskColor="rgba(0,0,0,0.08)"
+            style={{ borderRadius: 8 }}
+            pannable
+            zoomable
+          />
+        </ReactFlow>
+      )}
       {contextMenu && !isLocked && (
         <NodeContextMenu
           nodeId={contextMenu.nodeId}

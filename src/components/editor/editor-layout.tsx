@@ -146,8 +146,10 @@ export function EditorLayout({ codeHidden = false }: EditorLayoutProps) {
                   style={{ width: codeHidden || fullscreenPane === "preview" ? "100%" : `${100 - splitPercent}%` }}
                   className="h-full min-w-0 bg-white dark:bg-[var(--muted)] relative group/pane"
                 >
-                  {fullscreenButton("preview", "Preview")}
-                  <MermaidPreview />
+                  <MermaidPreview
+                    onToggleFullscreen={() => toggleFullscreen("preview")}
+                    isFullscreen={fullscreenPane === "preview"}
+                  />
                 </div>
               )}
             </div>

@@ -8,6 +8,8 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize,
+  Maximize2,
+  Minimize2,
   RotateCcw,
   ChevronDown,
   ChevronRight,
@@ -207,7 +209,12 @@ function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
   svgEl.prepend(styleEl);
 }
 
-export function MermaidPreview() {
+interface MermaidPreviewProps {
+  onToggleFullscreen?: () => void;
+  isFullscreen?: boolean;
+}
+
+export function MermaidPreview({ onToggleFullscreen, isFullscreen }: MermaidPreviewProps) {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
   const styleOverridesJson = useDiagramStore((s) => s.diagram?.styleOverrides ?? null);
   const setError = useDiagramStore((s) => s.setError);
@@ -359,6 +366,24 @@ export function MermaidPreview() {
 
           setParseError(null);
           setError(null);
+
+          // Auto-fit the newly rendered SVG to the viewport
+          requestAnimationFrame(() => {
+            if (!containerRef.current || !viewportRef.current) return;
+            const renderedSvg = containerRef.current.querySelector("svg");
+            if (!renderedSvg) return;
+            const vr = viewportRef.current.getBoundingClientRect();
+            // Read natural dimensions at zoom=1 (we just rendered fresh)
+            const sr = renderedSvg.getBoundingClientRect();
+            if (sr.width === 0 || sr.height === 0) return;
+            const pad = 32;
+            const fitZoom = Math.min(
+              MAX_ZOOM,
+              Math.max(MIN_ZOOM, Math.min((vr.width - pad) / sr.width, (vr.height - pad) / sr.height))
+            );
+            setZoom(fitZoom);
+            setPan({ x: 0, y: 0 });
+          });
         }
       } catch (err) {
         if (generation !== generationRef.current) return;
@@ -527,20 +552,31 @@ export function MermaidPreview() {
           </button>
         </div>
 
-        {sections.length > 0 && (
-          <button
-            onClick={() => setSectionPanelOpen(!sectionPanelOpen)}
-            className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded hover:bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
-            title="Toggle sections"
-          >
-            {sectionPanelOpen ? (
-              <ChevronDown size={12} />
-            ) : (
-              <ChevronRight size={12} />
-            )}
-            Sections ({sections.length})
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {sections.length > 0 && (
+            <button
+              onClick={() => setSectionPanelOpen(!sectionPanelOpen)}
+              className="flex items-center gap-1 px-1.5 py-0.5 text-xs rounded hover:bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+              title="Toggle sections"
+            >
+              {sectionPanelOpen ? (
+                <ChevronDown size={12} />
+              ) : (
+                <ChevronRight size={12} />
+              )}
+              Sections ({sections.length})
+            </button>
+          )}
+          {onToggleFullscreen && (
+            <button
+              onClick={onToggleFullscreen}
+              className="p-1 rounded hover:bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen preview"}
+            >
+              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Section toggle panel */}
