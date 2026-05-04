@@ -26,6 +26,7 @@ import { updateGraphPositions } from "@/lib/parser/reactflow-to-graph";
 import { customNodeTypes } from "./custom-nodes";
 import { customEdgeTypes } from "./custom-edges";
 import { NodeContextMenu } from "./node-context-menu";
+import { CanvasToolbar } from "./canvas-toolbar";
 import type { FlowchartGraph, GraphNode } from "@/types/graph";
 import type { MermaidNodeType } from "@/types/graph";
 
@@ -403,6 +404,21 @@ function VisualCanvasInner() {
 
   return (
     <div className="h-full w-full relative">
+      <CanvasToolbar
+        onAddNode={(shape) => {
+          if (!graphRef.current) return;
+          const id = generateNodeId(graphRef.current.nodes);
+          const center = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+          const updated: FlowchartGraph = {
+            ...graphRef.current,
+            nodes: [
+              ...graphRef.current.nodes,
+              { id, label: id, type: shape, position: { x: Math.round(center.x), y: Math.round(center.y) } },
+            ],
+          };
+          syncGraphToCode(updated);
+        }}
+      />
       {isLocked && (
         <div className="absolute inset-0 z-10 bg-[var(--background)]/50 flex items-center justify-center">
           <span className="text-sm text-[var(--primary)] font-medium animate-pulse">
