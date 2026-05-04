@@ -84,6 +84,13 @@ function upsertDefaultsAnnotation(
   const lines = code.split("\n");
   const re = new RegExp(`^\\s*%%@\\s+defaults\\s+${scope}\\b`);
   const idx = lines.findIndex((l) => re.test(l));
+  const isEmpty =
+    !style ||
+    Object.values(style).every((v) => v == null || v === "");
+  if (isEmpty) {
+    if (idx !== -1) lines.splice(idx, 1);
+    return lines.join("\n");
+  }
   const newLine = `    ${serializeAnnotation({ kind: "defaults", scope, style })}`;
   if (idx === -1) {
     lines.splice(1, 0, newLine);

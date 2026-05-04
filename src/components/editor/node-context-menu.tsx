@@ -22,6 +22,9 @@ const SHAPE_OPTIONS: { label: string; value: MermaidNodeType }[] = [
   { label: "Subroutine", value: "subroutine" },
   { label: "Cylinder", value: "cylinder" },
   { label: "Circle", value: "circle" },
+  { label: "Hexagon", value: "hexagon" },
+  { label: "Parallelogram", value: "parallelogram" },
+  { label: "Trapezoid", value: "trapezoid" },
 ];
 
 const COLOR_PRESETS: { label: string; fill: string | null; stroke: string | null }[] = [
