@@ -99,32 +99,33 @@ function EditableLabel({
   );
 }
 
-function useNodeStyles(nodeId: string | null): React.CSSProperties {
+function useNodeStyles(nodeId: string | null, dataStyle?: NodeStyleOverride): React.CSSProperties {
   const styleOverridesJson = useDiagramStore((s) => s.diagram?.styleOverrides ?? null);
   return useMemo(() => {
-    if (!styleOverridesJson || !nodeId) return {};
-    try {
-      const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
-      const globalNode = styles.globalNode ?? {};
-      const nodeOverride = styles.nodes?.[nodeId] ?? {};
-      const merged: NodeStyleOverride = { ...globalNode, ...nodeOverride };
-      const css: React.CSSProperties = {};
-      if (merged.fontFamily) css.fontFamily = merged.fontFamily;
-      if (merged.fontSize) css.fontSize = `${merged.fontSize}px`;
-      if (merged.fontColor) css.color = merged.fontColor;
-      if (merged.backgroundColor) css.backgroundColor = merged.backgroundColor;
-      if (merged.borderColor) css.borderColor = merged.borderColor;
-      return css;
-    } catch {
-      return {};
+    const merged: NodeStyleOverride = {};
+    if (styleOverridesJson) {
+      try {
+        const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
+        Object.assign(merged, styles.globalNode ?? {}, nodeId ? styles.nodes?.[nodeId] ?? {} : {});
+      } catch {
+        /* ignore */
+      }
     }
-  }, [styleOverridesJson, nodeId]);
+    Object.assign(merged, dataStyle ?? {});
+    const css: React.CSSProperties = {};
+    if (merged.fontFamily) css.fontFamily = merged.fontFamily;
+    if (merged.fontSize) css.fontSize = `${merged.fontSize}px`;
+    if (merged.fontColor) css.color = merged.fontColor;
+    if (merged.backgroundColor) css.backgroundColor = merged.backgroundColor;
+    if (merged.borderColor) css.borderColor = merged.borderColor;
+    return css;
+  }, [styleOverridesJson, nodeId, dataStyle]);
 }
 
 function DefaultNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
+  const nodeStyles = useNodeStyles(nodeId, nodeData.style);
   return (
     <>
       <NodeResizer
@@ -149,7 +150,7 @@ function DefaultNode({ data, selected }: NodeProps) {
 function DecisionNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
+  const nodeStyles = useNodeStyles(nodeId, nodeData.style);
   return (
     <>
       <NodeResizer
@@ -186,7 +187,7 @@ function DecisionNode({ data, selected }: NodeProps) {
 function StadiumNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
+  const nodeStyles = useNodeStyles(nodeId, nodeData.style);
   return (
     <>
       <NodeResizer
@@ -211,7 +212,7 @@ function StadiumNode({ data, selected }: NodeProps) {
 function SubroutineNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
+  const nodeStyles = useNodeStyles(nodeId, nodeData.style);
   return (
     <>
       <NodeResizer
@@ -236,7 +237,7 @@ function SubroutineNode({ data, selected }: NodeProps) {
 function CylinderNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
+  const nodeStyles = useNodeStyles(nodeId, nodeData.style);
   return (
     <>
       <NodeResizer
@@ -263,7 +264,7 @@ function CylinderNode({ data, selected }: NodeProps) {
 function CircleNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
+  const nodeStyles = useNodeStyles(nodeId, nodeData.style);
   return (
     <>
       <NodeResizer
@@ -289,7 +290,7 @@ function CircleNode({ data, selected }: NodeProps) {
 function HexagonNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
+  const nodeStyles = useNodeStyles(nodeId, nodeData.style);
   return (
     <>
       <NodeResizer minWidth={100} minHeight={60} isVisible={!!selected && !nodeData.isLocked} />
@@ -323,7 +324,7 @@ function HexagonNode({ data, selected }: NodeProps) {
 function ParallelogramNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
+  const nodeStyles = useNodeStyles(nodeId, nodeData.style);
   return (
     <>
       <NodeResizer minWidth={100} minHeight={60} isVisible={!!selected && !nodeData.isLocked} />
@@ -357,7 +358,7 @@ function ParallelogramNode({ data, selected }: NodeProps) {
 function TrapezoidNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
+  const nodeStyles = useNodeStyles(nodeId, nodeData.style);
   return (
     <>
       <NodeResizer minWidth={100} minHeight={60} isVisible={!!selected && !nodeData.isLocked} />

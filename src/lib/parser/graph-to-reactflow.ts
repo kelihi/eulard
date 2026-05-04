@@ -1,5 +1,5 @@
 import type { Node, Edge } from "@xyflow/react";
-import type { FlowchartGraph } from "@/types/graph";
+import type { FlowchartGraph, NodeStyleOverride } from "@/types/graph";
 
 /**
  * Split a label on <br/>, <br>, or <br /> tags and return an array of lines.
@@ -22,6 +22,7 @@ export function estimateNodeSize(label: string): { width: number; height: number
 export interface FlowNodeData {
   label: string;
   mermaidType: string;
+  style?: NodeStyleOverride;
   onRenameNode?: (nodeId: string, newLabel: string) => void;
   isLocked?: boolean;
   [key: string]: unknown;
@@ -77,6 +78,7 @@ export function graphToReactFlow(
       data: {
         label: n.label,
         mermaidType: n.type,
+        style: n.style,
         onRenameNode,
         isLocked,
       },
