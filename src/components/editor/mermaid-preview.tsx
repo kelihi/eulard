@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
-import type { DiagramStyles } from "@/types/graph";
+import type { DiagramStyles, NodeStyleOverride, EdgeStyleOverride } from "@/types/graph";
+import { parseAnnotations } from "@/lib/parser/annotations";
 import {
   ZoomIn,
   ZoomOut,
@@ -313,15 +314,11 @@ export function MermaidPreview() {
         if (containerRef.current && generation === generationRef.current) {
           containerRef.current.innerHTML = clean;
 
-          // Apply style overrides to the rendered SVG
+          // Apply style overrides to the rendered SVG (sidecar JSON + code annotations)
           const svgEl = containerRef.current.querySelector("svg");
-          if (svgEl && styleOverridesJson) {
-            try {
-              const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
-              applyStylesToSvg(svgEl, styles);
-            } catch {
-              // ignore invalid JSON
-            }
+          if (svgEl) {
+            const styles = stylesFromCodeAndSidecar(code, styleOverridesJson);
+            applyStylesToSvg(svgEl, styles);
           }
 
           setParseError(null);
@@ -340,25 +337,27 @@ export function MermaidPreview() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- styleOverridesJson intentionally excluded; style-only updates handled by dedicated effect below
   }, [code, setError]);
 
-  // Re-apply styles when styleOverrides changes without re-rendering
+  // Re-apply styles when code or styleOverrides changes without re-rendering the diagram
   useEffect(() => {
     if (!containerRef.current) return;
     const svgEl = containerRef.current.querySelector("svg");
     if (!svgEl) return;
 
-    if (styleOverridesJson) {
-      try {
-        const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
-        applyStylesToSvg(svgEl, styles);
-      } catch {
-        // ignore invalid JSON
-      }
+    const styles = stylesFromCodeAndSidecar(code, styleOverridesJson);
+    const hasAnyStyles =
+      !!styles.globalNode ||
+      !!styles.globalEdge ||
+      (!!styles.nodes && Object.keys(styles.nodes).length > 0) ||
+      (!!styles.edges && Object.keys(styles.edges).length > 0);
+
+    if (hasAnyStyles) {
+      applyStylesToSvg(svgEl, styles);
     } else {
-      // Remove any injected styles
+      // Nothing to apply — strip any previously injected style element
       const existingStyle = svgEl.querySelector("style[data-eulard-styles]");
       if (existingStyle) existingStyle.remove();
     }
-  }, [styleOverridesJson]);
+  }, [code, styleOverridesJson]);
 
   // Zoom helpers
   const clampZoom = useCallback((z: number) => {
@@ -598,4 +597,52 @@ export function MermaidPreview() {
       )}
     </div>
   );
+}
+
+/**
+ * Build a DiagramStyles view from sidecar JSON + `%%@` annotations in code.
+ * Sidecar is applied first (legacy support), then annotations layer on top.
+ */
+function stylesFromCodeAndSidecar(
+  code: string,
+  styleOverridesJson: string | null
+): DiagramStyles {
+  const result: DiagramStyles = {};
+
+  // Start with sidecar (legacy support)
+  if (styleOverridesJson) {
+    try {
+      Object.assign(result, JSON.parse(styleOverridesJson) as DiagramStyles);
+    } catch {
+      // ignore invalid JSON
+    }
+  }
+
+  // Layer in annotations from code
+  const { annotations } = parseAnnotations(code);
+  for (const ann of annotations) {
+    if (ann.kind === "defaults" && ann.scope === "node") {
+      result.globalNode = {
+        ...result.globalNode,
+        ...(ann.style as NodeStyleOverride),
+      };
+    } else if (ann.kind === "defaults" && ann.scope === "edge") {
+      result.globalEdge = {
+        ...result.globalEdge,
+        ...(ann.style as EdgeStyleOverride),
+      };
+    } else if (ann.kind === "node" && ann.style) {
+      result.nodes = {
+        ...result.nodes,
+        [ann.id]: { ...result.nodes?.[ann.id], ...ann.style },
+      };
+    } else if (ann.kind === "edge" && ann.style) {
+      const edgeKey = `${ann.source}->${ann.target}`;
+      result.edges = {
+        ...result.edges,
+        [edgeKey]: { ...result.edges?.[edgeKey], ...ann.style },
+      };
+    }
+  }
+  return result;
 }
