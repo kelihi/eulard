@@ -36,9 +36,6 @@ interface DiagramStore {
 
   setCode: (code: string) => void;
   setTitle: (title: string) => void;
-  setPositions: (positions: string) => void;
-  setStyleOverrides: (styles: DiagramStyles) => void;
-  getStyleOverrides: () => DiagramStyles;
   setGlobalNodeStyle: (style: NodeStyleOverride) => void;
   setGlobalEdgeStyle: (style: EdgeStyleOverride) => void;
   setNodeStyle: (id: string, style: NodeStyleOverride) => void;
@@ -160,31 +157,6 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     if (!diagram) return;
     set({ diagram: { ...diagram, title }, isDirty: true });
     scheduleSave(get);
-  },
-
-  setPositions: (positions: string) => {
-    const { diagram } = get();
-    if (!diagram) return;
-    set({ diagram: { ...diagram, positions }, isDirty: true });
-    scheduleSave(get);
-  },
-
-  setStyleOverrides: (styles: DiagramStyles) => {
-    const { diagram } = get();
-    if (!diagram) return;
-    const styleOverrides = JSON.stringify(styles);
-    set({ diagram: { ...diagram, styleOverrides }, isDirty: true });
-    scheduleSave(get);
-  },
-
-  getStyleOverrides: (): DiagramStyles => {
-    const { diagram } = get();
-    if (!diagram?.styleOverrides) return {};
-    try {
-      return JSON.parse(diagram.styleOverrides) as DiagramStyles;
-    } catch {
-      return {};
-    }
   },
 
   setGlobalNodeStyle: (style: NodeStyleOverride) => {
@@ -350,8 +322,7 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
         body: JSON.stringify({
           title: diagram.title,
           code: diagram.code,
-          positions: diagram.positions,
-          styleOverrides: diagram.styleOverrides,
+          // positions/styleOverrides intentionally omitted — code is canonical
         }),
       });
       set({ isDirty: false, syncState: "idle" });

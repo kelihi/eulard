@@ -85,6 +85,8 @@ export async function initializeDatabase(): Promise<void> {
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL DEFAULT 'Untitled Diagram',
       code TEXT NOT NULL DEFAULT 'flowchart TB\n    A[Start] --> B[End]',
+      -- DEPRECATED: positions and style_overrides are now baked into \`code\` as %%@
+      -- directives. Columns retained for one release as a safety net for older rows.
       positions TEXT,
       style_overrides TEXT,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
