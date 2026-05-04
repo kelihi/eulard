@@ -67,6 +67,10 @@ function VisualCanvasInner() {
   const codeFromCanvasRef = useRef<string | null>(null);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [selection, setSelection] = useState<{
+    nodeId: string | null;
+    edgeId: string | null;
+  }>({ nodeId: null, edgeId: null });
 
   const { screenToFlowPosition } = useReactFlow();
 
@@ -396,6 +400,58 @@ function VisualCanvasInner() {
     [isLocked, syncGraphToCode]
   );
 
+  const handleDuplicate = useCallback(
+    (id: string) => {
+      if (!graphRef.current || isLocked) return;
+      const original = graphRef.current.nodes.find((n) => n.id === id);
+      if (!original) return;
+      const newId = generateNodeId(graphRef.current.nodes);
+      const updated: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: [
+          ...graphRef.current.nodes,
+          {
+            ...original,
+            id: newId,
+            label: newId,
+            position: {
+              x: original.position.x + 40,
+              y: original.position.y + 40,
+            },
+          },
+        ],
+      };
+      syncGraphToCode(updated);
+    },
+    [isLocked, syncGraphToCode]
+  );
+
+  const handleEdgeDelete = useCallback(
+    (edgeId: string) => {
+      if (!graphRef.current || isLocked) return;
+      const updated: FlowchartGraph = {
+        ...graphRef.current,
+        edges: graphRef.current.edges.filter((e) => e.id !== edgeId),
+      };
+      syncGraphToCode(updated);
+      setEdges((prev) => prev.filter((e) => e.id !== edgeId));
+      setSelection((prev) =>
+        prev.edgeId === edgeId ? { ...prev, edgeId: null } : prev
+      );
+    },
+    [isLocked, syncGraphToCode]
+  );
+
+  const onSelectionChange = useCallback(
+    (sel: { nodes: Node[]; edges: Edge[] }) => {
+      setSelection({
+        nodeId: sel.nodes[0]?.id ?? null,
+        edgeId: sel.edges[0]?.id ?? null,
+      });
+    },
+    []
+  );
+
   // Close context menu on pane click
   const onPaneClick = useCallback(() => {
     setContextMenu(null);
@@ -440,6 +496,11 @@ function VisualCanvasInner() {
           };
           syncGraphToCode(updated);
         }}
+        selectedNodeId={isLocked ? null : selection.nodeId}
+        selectedEdgeId={isLocked ? null : selection.edgeId}
+        onDeleteNode={handleNodeDelete}
+        onDuplicateNode={handleDuplicate}
+        onDeleteEdge={handleEdgeDelete}
       />
       {isLocked && (
         <div className="absolute inset-0 z-10 bg-[var(--background)]/50 flex items-center justify-center">
@@ -457,6 +518,7 @@ function VisualCanvasInner() {
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
         onDoubleClick={onPaneDoubleClick}
+        onSelectionChange={onSelectionChange}
         nodeTypes={customNodeTypes}
         edgeTypes={customEdgeTypes}
         fitView
