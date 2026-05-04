@@ -33,19 +33,9 @@ interface ContextMenuState {
   y: number;
 }
 
-function buildPositionMap(nodes: Node[]): Record<string, { x: number; y: number }> {
-  const map: Record<string, { x: number; y: number }> = {};
-  for (const n of nodes) {
-    map[n.id] = { x: n.position.x, y: n.position.y };
-  }
-  return map;
-}
-
 export function VisualCanvas() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
-  const positions = useDiagramStore((s) => s.diagram?.positions ?? null);
   const setCode = useDiagramStore((s) => s.setCode);
-  const setPositions = useDiagramStore((s) => s.setPositions);
   const syncState = useDiagramStore((s) => s.syncState);
 
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -159,16 +149,6 @@ export function VisualCanvas() {
       const graph = mermaidToGraph(code);
       if (!graph) return;
 
-      // Check if stored positions exist in the database
-      let savedPositions: Record<string, { x: number; y: number }> | null = null;
-      if (positions) {
-        try {
-          savedPositions = JSON.parse(positions) as Record<string, { x: number; y: number }>;
-        } catch {
-          // ignore invalid JSON
-        }
-      }
-
       // Apply auto-layout if nodes have no positions (all at 0,0)
       const allAtOrigin = graph.nodes.every(
         (n) => n.position.x === 0 && n.position.y === 0
@@ -176,16 +156,7 @@ export function VisualCanvas() {
 
       let layoutGraph = allAtOrigin ? autoLayout(graph) : graph;
 
-      // If saved positions exist, apply them to matching nodes
-      if (savedPositions) {
-        layoutGraph = {
-          ...layoutGraph,
-          nodes: layoutGraph.nodes.map((n) => {
-            const saved = savedPositions[n.id];
-            return saved ? { ...n, position: { x: saved.x, y: saved.y } } : n;
-          }),
-        };
-      } else if (graphRef.current && !allAtOrigin) {
+      if (graphRef.current && !allAtOrigin) {
         // Preserve previous in-memory positions for existing nodes
         const prevPositions = new Map(
           graphRef.current.nodes.map((n) => [n.id, n.position])
@@ -206,7 +177,7 @@ export function VisualCanvas() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [code, positions, onRenameNode, isLocked, injectEdgeCallbacks]);
+  }, [code, onRenameNode, isLocked, injectEdgeCallbacks]);
 
   // Re-inject edge callbacks when handleRenameEdge changes
   useEffect(() => {
@@ -224,6 +195,7 @@ export function VisualCanvas() {
       const hasDragEnd = changes.some(
         (c) => c.type === "position" && c.dragging === false
       );
+      const hasResize = changes.some((c) => c.type === "dimensions");
 
       if (hasDragStart) isDraggingRef.current = true;
 
@@ -232,25 +204,20 @@ export function VisualCanvas() {
 
         if (hasDragEnd) {
           isDraggingRef.current = false;
+        }
 
-          // Sync positions back to code
-          if (graphRef.current) {
-            const updatedGraph = updateGraphPositions(
-              graphRef.current,
-              updatedNodes
-            );
-            syncGraphToCode(updatedGraph);
-
-            // Persist positions to the database
-            const positionMap = buildPositionMap(updatedNodes);
-            setPositions(JSON.stringify(positionMap));
-          }
+        if ((hasDragEnd || hasResize) && graphRef.current) {
+          const updatedGraph = updateGraphPositions(
+            graphRef.current,
+            updatedNodes
+          );
+          syncGraphToCode(updatedGraph);
         }
 
         return updatedNodes;
       });
     },
-    [isLocked, syncGraphToCode, setPositions]
+    [isLocked, syncGraphToCode]
   );
 
   const onEdgesChange = useCallback(

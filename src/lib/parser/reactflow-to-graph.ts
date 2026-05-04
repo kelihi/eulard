@@ -10,16 +10,21 @@ export function updateGraphPositions(
   graph: FlowchartGraph,
   rfNodes: Node[]
 ): FlowchartGraph {
-  const positionMap = new Map(
-    rfNodes.map((n) => [n.id, n.position])
-  );
-
+  const byId = new Map(rfNodes.map((n) => [n.id, n]));
   return {
     ...graph,
-    nodes: graph.nodes.map((node) => ({
-      ...node,
-      position: positionMap.get(node.id) ?? node.position,
-    })),
+    nodes: graph.nodes.map((node) => {
+      const rf = byId.get(node.id);
+      if (!rf) return node;
+      return {
+        ...node,
+        position: rf.position,
+        size:
+          typeof rf.width === "number" && typeof rf.height === "number"
+            ? { width: rf.width, height: rf.height }
+            : node.size,
+      };
+    }),
   };
 }
 
