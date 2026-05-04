@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
+  useReactFlow,
   type Node,
   type Edge,
   type NodeChange,
@@ -23,7 +25,7 @@ import { updateGraphPositions } from "@/lib/parser/reactflow-to-graph";
 import { customNodeTypes } from "./custom-nodes";
 import { customEdgeTypes } from "./custom-edges";
 import { NodeContextMenu } from "./node-context-menu";
-import type { FlowchartGraph } from "@/types/graph";
+import type { FlowchartGraph, GraphNode } from "@/types/graph";
 import type { MermaidNodeType } from "@/types/graph";
 
 interface ContextMenuState {
@@ -33,7 +35,24 @@ interface ContextMenuState {
   y: number;
 }
 
+function generateNodeId(existing: GraphNode[]): string {
+  const used = new Set(existing.map((n) => n.id));
+  for (let i = 1; i < 1000; i++) {
+    const id = `N${i}`;
+    if (!used.has(id)) return id;
+  }
+  return `N${Date.now()}`;
+}
+
 export function VisualCanvas() {
+  return (
+    <ReactFlowProvider>
+      <VisualCanvasInner />
+    </ReactFlowProvider>
+  );
+}
+
+function VisualCanvasInner() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
   const setCode = useDiagramStore((s) => s.setCode);
   const syncState = useDiagramStore((s) => s.syncState);
@@ -46,6 +65,8 @@ export function VisualCanvas() {
   const codeFromCanvasRef = useRef<string | null>(null);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  const { screenToFlowPosition } = useReactFlow();
 
   const isLocked = syncState === "ai-streaming";
 
@@ -328,6 +349,29 @@ export function VisualCanvas() {
     setContextMenu(null);
   }, []);
 
+  // Double-click empty pane to add a new node
+  const onPaneDoubleClick = useCallback(
+    (event: React.MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.classList.contains("react-flow__pane")) return;
+      if (isLocked || !graphRef.current) return;
+      const pos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const newId = generateNodeId(graphRef.current.nodes);
+      const newNode: GraphNode = {
+        id: newId,
+        label: newId,
+        type: "default",
+        position: { x: Math.round(pos.x), y: Math.round(pos.y) },
+      };
+      const updatedGraph: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: [...graphRef.current.nodes, newNode],
+      };
+      syncGraphToCode(updatedGraph);
+    },
+    [isLocked, screenToFlowPosition, syncGraphToCode]
+  );
+
   return (
     <div className="h-full w-full relative">
       {isLocked && (
@@ -344,6 +388,7 @@ export function VisualCanvas() {
         onEdgesChange={onEdgesChange}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
+        onDoubleClick={onPaneDoubleClick}
         nodeTypes={customNodeTypes}
         edgeTypes={customEdgeTypes}
         fitView
