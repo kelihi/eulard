@@ -5,7 +5,11 @@ import type {
   DefaultsAnnotation,
   AnnotationParseResult,
 } from "@/types/annotations";
-import type { NodeStyleOverride, EdgeStyleOverride } from "@/types/graph";
+import type {
+  NodeStyleOverride,
+  EdgeStyleOverride,
+  DiagramStyles,
+} from "@/types/graph";
 
 const DIRECTIVE_RE = /^\s*%%@\s+(.+?)\s*$/;
 
@@ -281,4 +285,40 @@ function serializeDefaultsAnnotation(ann: DefaultsAnnotation): string {
 
 function quoteIfNeeded(value: string): string {
   return /\s/.test(value) ? `"${value}"` : value;
+}
+
+/**
+ * Build a DiagramStyles view by parsing only the `%%@` annotations in `code`.
+ * Mirrors the annotation-layering logic from `stylesFromCodeAndSidecar` in
+ * mermaid-preview, but without the legacy sidecar input — used by the style
+ * panel to read the current per-object and global styles directly from code.
+ */
+export function stylesFromCode(code: string): DiagramStyles {
+  const result: DiagramStyles = {};
+  const { annotations } = parseAnnotations(code);
+  for (const ann of annotations) {
+    if (ann.kind === "defaults" && ann.scope === "node") {
+      result.globalNode = {
+        ...result.globalNode,
+        ...(ann.style as NodeStyleOverride),
+      };
+    } else if (ann.kind === "defaults" && ann.scope === "edge") {
+      result.globalEdge = {
+        ...result.globalEdge,
+        ...(ann.style as EdgeStyleOverride),
+      };
+    } else if (ann.kind === "node" && ann.style) {
+      result.nodes = {
+        ...result.nodes,
+        [ann.id]: { ...result.nodes?.[ann.id], ...ann.style },
+      };
+    } else if (ann.kind === "edge" && ann.style) {
+      const edgeKey = `${ann.source}->${ann.target}`;
+      result.edges = {
+        ...result.edges,
+        [edgeKey]: { ...result.edges?.[edgeKey], ...ann.style },
+      };
+    }
+  }
+  return result;
 }

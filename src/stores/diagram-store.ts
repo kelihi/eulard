@@ -1,7 +1,17 @@
 import { create } from "zustand";
 import type { DiagramState, DiagramListItem, Folder } from "@/types/diagram";
-import type { DiagramStyles } from "@/types/graph";
+import type {
+  DiagramStyles,
+  NodeStyleOverride,
+  EdgeStyleOverride,
+} from "@/types/graph";
 import { migrateSidecarToCode } from "@/lib/parser/migrate-sidecar";
+import { mermaidToGraph } from "@/lib/parser/mermaid-to-graph";
+import { graphToMermaid } from "@/lib/parser/graph-to-mermaid";
+import {
+  serializeAnnotation,
+  stylesFromCode,
+} from "@/lib/parser/annotations";
 
 const MAX_HISTORY = 50;
 
@@ -29,6 +39,11 @@ interface DiagramStore {
   setPositions: (positions: string) => void;
   setStyleOverrides: (styles: DiagramStyles) => void;
   getStyleOverrides: () => DiagramStyles;
+  setGlobalNodeStyle: (style: NodeStyleOverride) => void;
+  setGlobalEdgeStyle: (style: EdgeStyleOverride) => void;
+  setNodeStyle: (id: string, style: NodeStyleOverride) => void;
+  setEdgeStyle: (sourceTarget: string, style: EdgeStyleOverride) => void;
+  getCodeStyles: () => DiagramStyles;
   setSyncState: (state: DiagramStore["syncState"]) => void;
   setError: (error: string | null) => void;
   flushSave: () => Promise<void>;
@@ -57,6 +72,28 @@ function scheduleSave(get: () => DiagramStore) {
   saveTimeout = setTimeout(() => {
     get().saveDiagram();
   }, 1000);
+}
+
+/**
+ * Insert (or replace) a `%%@ defaults <scope> ...` directive in `code`.
+ * If a matching defaults line already exists, it is replaced in place;
+ * otherwise we insert it directly after the diagram header (line 0).
+ */
+function upsertDefaultsAnnotation(
+  code: string,
+  scope: "node" | "edge",
+  style: NodeStyleOverride | EdgeStyleOverride
+): string {
+  const lines = code.split("\n");
+  const re = new RegExp(`^\\s*%%@\\s+defaults\\s+${scope}\\b`);
+  const idx = lines.findIndex((l) => re.test(l));
+  const newLine = `    ${serializeAnnotation({ kind: "defaults", scope, style })}`;
+  if (idx === -1) {
+    lines.splice(1, 0, newLine);
+  } else {
+    lines[idx] = newLine;
+  }
+  return lines.join("\n");
 }
 
 export const useDiagramStore = create<DiagramStore>((set, get) => ({
@@ -148,6 +185,59 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
     } catch {
       return {};
     }
+  },
+
+  setGlobalNodeStyle: (style: NodeStyleOverride) => {
+    const { diagram } = get();
+    if (!diagram) return;
+    const code = upsertDefaultsAnnotation(diagram.code, "node", style);
+    set({ diagram: { ...diagram, code }, isDirty: true });
+    scheduleSave(get);
+  },
+
+  setGlobalEdgeStyle: (style: EdgeStyleOverride) => {
+    const { diagram } = get();
+    if (!diagram) return;
+    const code = upsertDefaultsAnnotation(diagram.code, "edge", style);
+    set({ diagram: { ...diagram, code }, isDirty: true });
+    scheduleSave(get);
+  },
+
+  setNodeStyle: (id: string, style: NodeStyleOverride) => {
+    const { diagram } = get();
+    if (!diagram) return;
+    const graph = mermaidToGraph(diagram.code);
+    if (!graph) return;
+    const updated = {
+      ...graph,
+      nodes: graph.nodes.map((n) => (n.id === id ? { ...n, style } : n)),
+    };
+    const code = graphToMermaid(updated);
+    set({ diagram: { ...diagram, code }, isDirty: true });
+    scheduleSave(get);
+  },
+
+  setEdgeStyle: (sourceTarget: string, style: EdgeStyleOverride) => {
+    const { diagram } = get();
+    if (!diagram) return;
+    const graph = mermaidToGraph(diagram.code);
+    if (!graph) return;
+    const [source, target] = sourceTarget.split("->");
+    const updated = {
+      ...graph,
+      edges: graph.edges.map((e) =>
+        e.source === source && e.target === target ? { ...e, style } : e
+      ),
+    };
+    const code = graphToMermaid(updated);
+    set({ diagram: { ...diagram, code }, isDirty: true });
+    scheduleSave(get);
+  },
+
+  getCodeStyles: (): DiagramStyles => {
+    const { diagram } = get();
+    if (!diagram) return {};
+    return stylesFromCode(diagram.code);
   },
 
   setSyncState: (syncState) => set({ syncState }),
