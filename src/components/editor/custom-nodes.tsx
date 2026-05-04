@@ -286,6 +286,108 @@ function CircleNode({ data, selected }: NodeProps) {
   );
 }
 
+function HexagonNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as FlowNodeData;
+  const nodeId = useNodeId();
+  const nodeStyles = useNodeStyles(nodeId);
+  return (
+    <>
+      <NodeResizer minWidth={100} minHeight={60} isVisible={!!selected && !nodeData.isLocked} />
+      <div className="relative w-full h-full flex items-center justify-center">
+        <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+        <svg viewBox="0 0 100 60" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+          <polygon
+            points="20,2 80,2 98,30 80,58 20,58 2,30"
+            fill={nodeStyles.backgroundColor ?? "var(--background)"}
+            stroke={nodeStyles.borderColor ?? "var(--border)"}
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <span
+          className="relative z-10 text-sm font-medium text-center px-3"
+          style={{
+            fontFamily: nodeStyles.fontFamily,
+            fontSize: nodeStyles.fontSize,
+            color: nodeStyles.color,
+          }}
+        >
+          <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+        </span>
+        <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      </div>
+    </>
+  );
+}
+
+function ParallelogramNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as FlowNodeData;
+  const nodeId = useNodeId();
+  const nodeStyles = useNodeStyles(nodeId);
+  return (
+    <>
+      <NodeResizer minWidth={100} minHeight={60} isVisible={!!selected && !nodeData.isLocked} />
+      <div className="relative w-full h-full flex items-center justify-center">
+        <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+        <svg viewBox="0 0 100 60" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+          <polygon
+            points="20,2 98,2 80,58 2,58"
+            fill={nodeStyles.backgroundColor ?? "var(--background)"}
+            stroke={nodeStyles.borderColor ?? "var(--border)"}
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <span
+          className="relative z-10 text-sm font-medium text-center px-3"
+          style={{
+            fontFamily: nodeStyles.fontFamily,
+            fontSize: nodeStyles.fontSize,
+            color: nodeStyles.color,
+          }}
+        >
+          <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+        </span>
+        <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      </div>
+    </>
+  );
+}
+
+function TrapezoidNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as FlowNodeData;
+  const nodeId = useNodeId();
+  const nodeStyles = useNodeStyles(nodeId);
+  return (
+    <>
+      <NodeResizer minWidth={100} minHeight={60} isVisible={!!selected && !nodeData.isLocked} />
+      <div className="relative w-full h-full flex items-center justify-center">
+        <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+        <svg viewBox="0 0 100 60" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+          <polygon
+            points="20,2 80,2 98,58 2,58"
+            fill={nodeStyles.backgroundColor ?? "var(--background)"}
+            stroke={nodeStyles.borderColor ?? "var(--border)"}
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <span
+          className="relative z-10 text-sm font-medium text-center px-3"
+          style={{
+            fontFamily: nodeStyles.fontFamily,
+            fontSize: nodeStyles.fontSize,
+            color: nodeStyles.color,
+          }}
+        >
+          <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+        </span>
+        <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      </div>
+    </>
+  );
+}
+
 export const customNodeTypes = {
   default: DefaultNode,
   decision: DecisionNode,
@@ -293,4 +395,7 @@ export const customNodeTypes = {
   subroutine: SubroutineNode,
   cylinder: CylinderNode,
   circle: CircleNode,
+  hexagon: HexagonNode,
+  parallelogram: ParallelogramNode,
+  trapezoid: TrapezoidNode,
 };
