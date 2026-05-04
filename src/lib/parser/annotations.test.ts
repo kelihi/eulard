@@ -53,3 +53,38 @@ describe("parseAnnotations — happy path", () => {
     expect(parseAnnotations(code).annotations).toEqual([]);
   });
 });
+
+describe("parseAnnotations — error handling", () => {
+  it("records malformed lines without throwing", () => {
+    const code = `flowchart TB
+    A[Start]
+    %%@ node
+    %%@ edge A->`;
+    const result = parseAnnotations(code);
+    expect(result.annotations).toEqual([]);
+    expect(result.malformed).toHaveLength(2);
+    expect(result.malformed[0].lineNumber).toBe(3);
+  });
+
+  it("preserves unknown keys as extra", () => {
+    const code = `%%@ node A weight=99 priority=high`;
+    const [ann] = parseAnnotations(code).annotations;
+    expect(ann.kind === "node" && ann.extra).toEqual({
+      weight: "99",
+      priority: "high",
+    });
+  });
+
+  it("ignores `%%` non-directive comments", () => {
+    const code = `flowchart TB
+    %% just a comment
+    A[Start]`;
+    expect(parseAnnotations(code).annotations).toEqual([]);
+  });
+
+  it("supports quoted values with spaces", () => {
+    const code = `%%@ node A font="Helvetica Neue"`;
+    const [ann] = parseAnnotations(code).annotations;
+    expect(ann.kind === "node" && ann.style?.fontFamily).toBe("Helvetica Neue");
+  });
+});
