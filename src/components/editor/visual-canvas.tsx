@@ -374,6 +374,28 @@ function VisualCanvasInner() {
     [isLocked, syncGraphToCode]
   );
 
+  const handleNodeSetColor = useCallback(
+    (nodeId: string, fill: string | null, stroke: string | null) => {
+      if (!graphRef.current || isLocked) return;
+      const updated: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: graphRef.current.nodes.map((n) => {
+          if (n.id !== nodeId) return n;
+          const style = { ...(n.style ?? {}) };
+          if (fill === null) delete style.backgroundColor;
+          else style.backgroundColor = fill;
+          if (stroke === null) delete style.borderColor;
+          else style.borderColor = stroke;
+          return Object.keys(style).length > 0
+            ? { ...n, style }
+            : { ...n, style: undefined };
+        }),
+      };
+      syncGraphToCode(updated);
+    },
+    [isLocked, syncGraphToCode]
+  );
+
   // Close context menu on pane click
   const onPaneClick = useCallback(() => {
     setContextMenu(null);
@@ -460,6 +482,7 @@ function VisualCanvasInner() {
           onRename={handleNodeRename}
           onDelete={handleNodeDelete}
           onChangeShape={handleNodeChangeShape}
+          onSetColor={handleNodeSetColor}
           onClose={handleContextMenuClose}
         />
       )}

@@ -11,6 +11,7 @@ interface NodeContextMenuProps {
   onRename: (nodeId: string, newLabel: string) => void;
   onDelete: (nodeId: string) => void;
   onChangeShape: (nodeId: string, newType: MermaidNodeType) => void;
+  onSetColor: (nodeId: string, fill: string | null, stroke: string | null) => void;
   onClose: () => void;
 }
 
@@ -23,6 +24,15 @@ const SHAPE_OPTIONS: { label: string; value: MermaidNodeType }[] = [
   { label: "Circle", value: "circle" },
 ];
 
+const COLOR_PRESETS: { label: string; fill: string | null; stroke: string | null }[] = [
+  { label: "Default", fill: null, stroke: null },
+  { label: "Blue", fill: "#dbeafe", stroke: "#3b82f6" },
+  { label: "Green", fill: "#dcfce7", stroke: "#22c55e" },
+  { label: "Yellow", fill: "#fef3c7", stroke: "#eab308" },
+  { label: "Red", fill: "#fee2e2", stroke: "#ef4444" },
+  { label: "Purple", fill: "#f3e8ff", stroke: "#a855f7" },
+];
+
 export function NodeContextMenu({
   nodeId,
   nodeLabel,
@@ -31,6 +41,7 @@ export function NodeContextMenu({
   onRename,
   onDelete,
   onChangeShape,
+  onSetColor,
   onClose,
 }: NodeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -157,6 +168,26 @@ export function NodeContextMenu({
                 ))}
               </div>
             )}
+          </div>
+          <div className="border-t border-[var(--border)] pt-1 px-2 py-1">
+            <div className="text-[10px] uppercase tracking-wide text-[var(--muted-foreground)] mb-1">Color</div>
+            <div className="flex gap-1 flex-wrap">
+              {COLOR_PRESETS.map((c) => (
+                <button
+                  key={c.label}
+                  onClick={() => {
+                    onSetColor(nodeId, c.fill, c.stroke);
+                    onClose();
+                  }}
+                  className="w-5 h-5 rounded border-2"
+                  style={{
+                    backgroundColor: c.fill ?? "transparent",
+                    borderColor: c.stroke ?? "var(--border)",
+                  }}
+                  title={c.label}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
