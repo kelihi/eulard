@@ -14,6 +14,7 @@ import {
   type Edge,
   type NodeChange,
   type EdgeChange,
+  type Connection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useDiagramStore } from "@/stores/diagram-store";
@@ -249,6 +250,34 @@ function VisualCanvasInner() {
     [isLocked]
   );
 
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      if (isLocked || !graphRef.current) return;
+      if (!connection.source || !connection.target) return;
+      if (connection.source === connection.target) return;
+
+      const exists = graphRef.current.edges.some(
+        (e) => e.source === connection.source && e.target === connection.target
+      );
+      if (exists) return;
+
+      const updated: FlowchartGraph = {
+        ...graphRef.current,
+        edges: [
+          ...graphRef.current.edges,
+          {
+            id: `e_user_${Date.now()}`,
+            source: connection.source,
+            target: connection.target,
+            type: "arrow",
+          },
+        ],
+      };
+      syncGraphToCode(updated);
+    },
+    [isLocked, syncGraphToCode]
+  );
+
   // Context menu handlers
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
@@ -386,6 +415,7 @@ function VisualCanvasInner() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
         onDoubleClick={onPaneDoubleClick}
@@ -393,7 +423,7 @@ function VisualCanvasInner() {
         edgeTypes={customEdgeTypes}
         fitView
         nodesDraggable={!isLocked}
-        nodesConnectable={false}
+        nodesConnectable={!isLocked}
         elementsSelectable={!isLocked}
         proOptions={{ hideAttribution: true }}
       >
