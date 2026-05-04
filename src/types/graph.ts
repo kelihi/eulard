@@ -11,7 +11,10 @@ export type MermaidNodeType =
   | "stadium"
   | "subroutine"
   | "cylinder"
-  | "circle";
+  | "circle"
+  | "hexagon"
+  | "parallelogram"
+  | "trapezoid";
 
 export type MermaidEdgeType = "arrow" | "dotted" | "thick";
 
@@ -22,7 +25,8 @@ export interface GraphNode {
   label: string;
   type: MermaidNodeType;
   position: { x: number; y: number };
-  style?: NodeStyle;
+  size?: { width: number; height: number };
+  style?: NodeStyleOverride;
 }
 
 export interface GraphEdge {
@@ -31,6 +35,7 @@ export interface GraphEdge {
   target: string;
   label?: string;
   type: MermaidEdgeType;
+  style?: EdgeStyleOverride;
 }
 
 export interface FlowchartGraph {
