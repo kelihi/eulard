@@ -47,18 +47,26 @@ export function graphToReactFlow(
   edges: Edge[];
 } {
   const nodes: Node<FlowNodeData>[] = graph.nodes.map((n) => {
-    const base = estimateNodeSize(n.label);
-    let width = base.width;
-    let height = base.height;
-    if (n.type === "decision") {
-      // Diamond needs more space: text area is roughly half the diamond dimensions
-      width = Math.max(120, base.width * 1.6);
-      height = Math.max(80, base.height * 1.6);
-    } else if (n.type === "circle") {
-      // Circle diameter should fit the content diagonally
-      const diameter = Math.max(64, Math.ceil(Math.sqrt(base.width * base.width + base.height * base.height) * 0.75));
-      width = diameter;
-      height = diameter;
+    let width: number;
+    let height: number;
+
+    if (n.size) {
+      width = n.size.width;
+      height = n.size.height;
+    } else {
+      const base = estimateNodeSize(n.label);
+      width = base.width;
+      height = base.height;
+      if (n.type === "decision") {
+        // Diamond needs more space: text area is roughly half the diamond dimensions
+        width = Math.max(120, base.width * 1.6);
+        height = Math.max(80, base.height * 1.6);
+      } else if (n.type === "circle") {
+        // Circle diameter should fit the content diagonally
+        const diameter = Math.max(64, Math.ceil(Math.sqrt(base.width * base.width + base.height * base.height) * 0.75));
+        width = diameter;
+        height = diameter;
+      }
     }
     return {
       id: n.id,
