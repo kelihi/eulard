@@ -228,3 +228,57 @@ function buildDefaultsAnnotation(
   if (Object.keys(extra).length > 0) ann.extra = extra;
   return ann;
 }
+
+export function serializeAnnotation(ann: Annotation): string {
+  switch (ann.kind) {
+    case "node":
+      return serializeNodeAnnotation(ann);
+    case "edge":
+      return serializeEdgeAnnotation(ann);
+    case "defaults":
+      return serializeDefaultsAnnotation(ann);
+  }
+}
+
+function serializeNodeAnnotation(ann: NodeAnnotation): string {
+  const parts: string[] = ["%%@", "node", ann.id];
+  if (ann.position) parts.push(`pos=${ann.position.x},${ann.position.y}`);
+  if (ann.size) parts.push(`size=${ann.size.width}x${ann.size.height}`);
+  if (ann.shape) parts.push(`shape=${ann.shape}`);
+  if (ann.style?.backgroundColor) parts.push(`fill=${ann.style.backgroundColor}`);
+  if (ann.style?.borderColor) parts.push(`stroke=${ann.style.borderColor}`);
+  if (ann.style?.fontColor) parts.push(`color=${ann.style.fontColor}`);
+  if (ann.style?.fontFamily) parts.push(`font=${quoteIfNeeded(ann.style.fontFamily)}`);
+  if (ann.style?.fontSize) parts.push(`fontSize=${ann.style.fontSize}`);
+  for (const [k, v] of Object.entries(ann.extra ?? {})) parts.push(`${k}=${quoteIfNeeded(v)}`);
+  return parts.join(" ");
+}
+
+function serializeEdgeAnnotation(ann: EdgeAnnotation): string {
+  const parts: string[] = ["%%@", "edge", `${ann.source}->${ann.target}`];
+  if (ann.style?.lineColor) parts.push(`color=${ann.style.lineColor}`);
+  if (ann.style?.lineThickness) parts.push(`width=${ann.style.lineThickness}`);
+  if (ann.style?.fontFamily) parts.push(`font=${quoteIfNeeded(ann.style.fontFamily)}`);
+  if (ann.style?.fontSize) parts.push(`fontSize=${ann.style.fontSize}`);
+  if (ann.style?.fontColor) parts.push(`fontColor=${ann.style.fontColor}`);
+  for (const [k, v] of Object.entries(ann.extra ?? {})) parts.push(`${k}=${quoteIfNeeded(v)}`);
+  return parts.join(" ");
+}
+
+function serializeDefaultsAnnotation(ann: DefaultsAnnotation): string {
+  const parts: string[] = ["%%@", "defaults", ann.scope];
+  const style = ann.style as NodeStyleOverride & EdgeStyleOverride;
+  if (style.fontFamily) parts.push(`font=${quoteIfNeeded(style.fontFamily)}`);
+  if (style.fontSize) parts.push(`size=${style.fontSize}`);
+  if (style.fontColor) parts.push(`color=${style.fontColor}`);
+  if (ann.scope === "node" && style.backgroundColor) parts.push(`fill=${style.backgroundColor}`);
+  if (ann.scope === "node" && style.borderColor) parts.push(`stroke=${style.borderColor}`);
+  if (ann.scope === "edge" && style.lineColor) parts.push(`lineColor=${style.lineColor}`);
+  if (ann.scope === "edge" && style.lineThickness) parts.push(`lineWidth=${style.lineThickness}`);
+  for (const [k, v] of Object.entries(ann.extra ?? {})) parts.push(`${k}=${quoteIfNeeded(v)}`);
+  return parts.join(" ");
+}
+
+function quoteIfNeeded(value: string): string {
+  return /\s/.test(value) ? `"${value}"` : value;
+}
