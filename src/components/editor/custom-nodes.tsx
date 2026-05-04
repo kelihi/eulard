@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Handle, Position, useNodeId } from "@xyflow/react";
+import { Handle, Position, NodeResizer, useNodeId } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 import type { FlowNodeData } from "@/lib/parser/graph-to-reactflow";
 import { useDiagramStore } from "@/stores/diagram-store";
@@ -121,112 +121,168 @@ function useNodeStyles(nodeId: string | null): React.CSSProperties {
   }, [styleOverridesJson, nodeId]);
 }
 
-function DefaultNode({ data }: NodeProps) {
+function DefaultNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
   return (
-    <div
-      className="px-4 py-2 rounded border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center"
-      style={nodeStyles}
-    >
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
-    </div>
-  );
-}
-
-function DecisionNode({ data }: NodeProps) {
-  const nodeData = data as unknown as FlowNodeData;
-  const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
-  return (
-    <div className="relative flex items-center justify-center w-full h-full">
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
-        <polygon
-          points="50,2 98,50 50,98 2,50"
-          fill={nodeStyles.backgroundColor ?? "var(--background)"}
-          stroke={nodeStyles.borderColor ?? "var(--border)"}
-          strokeWidth="2"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-      <span
-        className="relative z-10 text-sm font-medium text-center px-4 whitespace-normal break-words overflow-hidden"
-        style={{ maxWidth: '55%', fontFamily: nodeStyles.fontFamily, fontSize: nodeStyles.fontSize, color: nodeStyles.color }}
-      >
-        <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
-      </span>
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
-    </div>
-  );
-}
-
-function StadiumNode({ data }: NodeProps) {
-  const nodeData = data as unknown as FlowNodeData;
-  const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
-  return (
-    <div
-      className="px-4 py-2 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center"
-      style={nodeStyles}
-    >
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
-    </div>
-  );
-}
-
-function SubroutineNode({ data }: NodeProps) {
-  const nodeData = data as unknown as FlowNodeData;
-  const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
-  return (
-    <div
-      className="px-4 py-2 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center border-double border-4 whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center"
-      style={nodeStyles}
-    >
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
-    </div>
-  );
-}
-
-function CylinderNode({ data }: NodeProps) {
-  const nodeData = data as unknown as FlowNodeData;
-  const nodeId = useNodeId();
-  const nodeStyles = useNodeStyles(nodeId);
-  return (
-    <div className="relative flex items-center justify-center w-full h-full">
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+    <>
+      <NodeResizer
+        minWidth={80}
+        minHeight={32}
+        isVisible={!!selected && !nodeData.isLocked}
+        lineClassName="!border-[var(--primary)]"
+        handleClassName="!bg-[var(--primary)] !border-[var(--background)]"
+      />
       <div
-        className="px-4 py-3 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%] whitespace-normal break-words w-full h-full flex items-center justify-center"
+        className="px-4 py-2 rounded border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center"
         style={nodeStyles}
       >
+        <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
         <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+        <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
       </div>
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
-    </div>
+    </>
   );
 }
 
-function CircleNode({ data }: NodeProps) {
+function DecisionNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as FlowNodeData;
   const nodeId = useNodeId();
   const nodeStyles = useNodeStyles(nodeId);
   return (
-    <div
-      className="rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm flex items-center justify-center text-center whitespace-normal break-words p-2 w-full h-full"
-      style={nodeStyles}
-    >
-      <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
-      <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
-      <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
-    </div>
+    <>
+      <NodeResizer
+        keepAspectRatio
+        minWidth={64}
+        minHeight={64}
+        isVisible={!!selected && !nodeData.isLocked}
+        lineClassName="!border-[var(--primary)]"
+        handleClassName="!bg-[var(--primary)] !border-[var(--background)]"
+      />
+      <div className="relative flex items-center justify-center w-full h-full">
+        <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+          <polygon
+            points="50,2 98,50 50,98 2,50"
+            fill={nodeStyles.backgroundColor ?? "var(--background)"}
+            stroke={nodeStyles.borderColor ?? "var(--border)"}
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+        <span
+          className="relative z-10 text-sm font-medium text-center px-4 whitespace-normal break-words overflow-hidden"
+          style={{ maxWidth: '55%', fontFamily: nodeStyles.fontFamily, fontSize: nodeStyles.fontSize, color: nodeStyles.color }}
+        >
+          <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+        </span>
+        <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      </div>
+    </>
+  );
+}
+
+function StadiumNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as FlowNodeData;
+  const nodeId = useNodeId();
+  const nodeStyles = useNodeStyles(nodeId);
+  return (
+    <>
+      <NodeResizer
+        minWidth={80}
+        minHeight={32}
+        isVisible={!!selected && !nodeData.isLocked}
+        lineClassName="!border-[var(--primary)]"
+        handleClassName="!bg-[var(--primary)] !border-[var(--background)]"
+      />
+      <div
+        className="px-4 py-2 rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center"
+        style={nodeStyles}
+      >
+        <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+        <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+        <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      </div>
+    </>
+  );
+}
+
+function SubroutineNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as FlowNodeData;
+  const nodeId = useNodeId();
+  const nodeStyles = useNodeStyles(nodeId);
+  return (
+    <>
+      <NodeResizer
+        minWidth={80}
+        minHeight={32}
+        isVisible={!!selected && !nodeData.isLocked}
+        lineClassName="!border-[var(--primary)]"
+        handleClassName="!bg-[var(--primary)] !border-[var(--background)]"
+      />
+      <div
+        className="px-4 py-2 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center border-double border-4 whitespace-normal break-words overflow-hidden w-full h-full flex items-center justify-center"
+        style={nodeStyles}
+      >
+        <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+        <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+        <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      </div>
+    </>
+  );
+}
+
+function CylinderNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as FlowNodeData;
+  const nodeId = useNodeId();
+  const nodeStyles = useNodeStyles(nodeId);
+  return (
+    <>
+      <NodeResizer
+        minWidth={80}
+        minHeight={48}
+        isVisible={!!selected && !nodeData.isLocked}
+        lineClassName="!border-[var(--primary)]"
+        handleClassName="!bg-[var(--primary)] !border-[var(--background)]"
+      />
+      <div className="relative flex items-center justify-center w-full h-full">
+        <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+        <div
+          className="px-4 py-3 border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm text-center rounded-b-[50%] rounded-t-[50%] whitespace-normal break-words w-full h-full flex items-center justify-center"
+          style={nodeStyles}
+        >
+          <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+        </div>
+        <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      </div>
+    </>
+  );
+}
+
+function CircleNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as FlowNodeData;
+  const nodeId = useNodeId();
+  const nodeStyles = useNodeStyles(nodeId);
+  return (
+    <>
+      <NodeResizer
+        keepAspectRatio
+        minWidth={64}
+        minHeight={64}
+        isVisible={!!selected && !nodeData.isLocked}
+        lineClassName="!border-[var(--primary)]"
+        handleClassName="!bg-[var(--primary)] !border-[var(--background)]"
+      />
+      <div
+        className="rounded-full border-2 border-[var(--border)] bg-[var(--background)] text-sm font-medium shadow-sm flex items-center justify-center text-center whitespace-normal break-words p-2 w-full h-full"
+        style={nodeStyles}
+      >
+        <Handle type="target" position={Position.Top} className="!bg-[var(--primary)] !w-2 !h-2" />
+        <EditableLabel label={nodeData.label} onRenameNode={nodeData.onRenameNode} isLocked={nodeData.isLocked} />
+        <Handle type="source" position={Position.Bottom} className="!bg-[var(--primary)] !w-2 !h-2" />
+      </div>
+    </>
   );
 }
 
