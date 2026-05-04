@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { DiagramState, DiagramListItem, Folder } from "@/types/diagram";
 import type { DiagramStyles } from "@/types/graph";
+import { migrateSidecarToCode } from "@/lib/parser/migrate-sidecar";
 
 const MAX_HISTORY = 50;
 
@@ -207,17 +208,37 @@ export const useDiagramStore = create<DiagramStore>((set, get) => ({
   loadDiagram: async (id: string) => {
     const res = await fetch(`/api/diagrams/${id}`);
     if (!res.ok) throw new Error("Failed to load diagram");
-    const data = await res.json();
-    const diagram = { ...data, permission: data.permission ?? null };
+    const data = (await res.json()) as DiagramState;
+
+    // One-shot migration: bake legacy sidecar JSON into the code as annotations.
+    // The code already contains annotations after this; the legacy columns become
+    // dormant for future writes.
+    const migratedCode = migrateSidecarToCode({
+      code: data.code,
+      positions: data.positions,
+      styleOverrides: data.styleOverrides,
+    });
+
+    const wasMigrated = migratedCode !== data.code;
+    const diagram: DiagramState = {
+      ...data,
+      code: migratedCode,
+      permission: data.permission ?? null,
+    };
+
     set({
       diagram,
-      isDirty: false,
+      isDirty: wasMigrated, // dirty so the migrated code persists
       error: null,
       undoStack: [],
       redoStack: [],
       canUndo: false,
       canRedo: false,
     });
+
+    if (wasMigrated) {
+      scheduleSave(get);
+    }
   },
 
   loadDiagrams: async () => {
