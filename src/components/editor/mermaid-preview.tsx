@@ -172,8 +172,14 @@ function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
 
   // Per-edge overrides
   if (styles.edges) {
-    for (const [edgeId, es] of Object.entries(styles.edges)) {
-      const safeEdgeId = sanitizeCssSelector(edgeId);
+    for (const [edgeKey, es] of Object.entries(styles.edges)) {
+      // edgeKey may be "source->target" (canonical, from code annotations) or
+      // a legacy internal id like "e0" (from older sidecar JSON). Translate
+      // "source->target" to mermaid's SVG id prefix `L_<source>_<target>`.
+      const isCodeKey = edgeKey.includes("->");
+      const safeEdgeId = isCodeKey
+        ? `L_${sanitizeCssSelector(edgeKey.replace("->", "_"))}`
+        : sanitizeCssSelector(edgeKey);
       const pathRules: string[] = [];
       const labelRules: string[] = [];
 
