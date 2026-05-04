@@ -457,6 +457,78 @@ function VisualCanvasInner() {
     setContextMenu(null);
   }, []);
 
+  // Add a default node at the current canvas viewport center
+  const addNodeAtCenter = useCallback(() => {
+    if (!graphRef.current || isLocked) return;
+    const center = screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+    const id = generateNodeId(graphRef.current.nodes);
+    const updated: FlowchartGraph = {
+      ...graphRef.current,
+      nodes: [
+        ...graphRef.current.nodes,
+        {
+          id,
+          label: id,
+          type: "default",
+          position: { x: Math.round(center.x), y: Math.round(center.y) },
+        },
+      ],
+    };
+    syncGraphToCode(updated);
+  }, [isLocked, screenToFlowPosition, syncGraphToCode]);
+
+  // Keyboard shortcuts: Delete/Backspace, Cmd/Ctrl+D, N
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (isLocked) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        target?.isContentEditable === true;
+      if (isEditable) return;
+
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (mod && (e.key === "d" || e.key === "D")) {
+        if (!selection.nodeId) return;
+        e.preventDefault();
+        handleDuplicate(selection.nodeId);
+        return;
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selection.nodeId) {
+          e.preventDefault();
+          handleNodeDelete(selection.nodeId);
+        } else if (selection.edgeId) {
+          e.preventDefault();
+          handleEdgeDelete(selection.edgeId);
+        }
+        return;
+      }
+
+      if (!mod && (e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        addNodeAtCenter();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [
+    isLocked,
+    selection.nodeId,
+    selection.edgeId,
+    handleDuplicate,
+    handleNodeDelete,
+    handleEdgeDelete,
+    addNodeAtCenter,
+  ]);
+
   // Double-click empty pane to add a new node
   const onPaneDoubleClick = useCallback(
     (event: React.MouseEvent) => {
