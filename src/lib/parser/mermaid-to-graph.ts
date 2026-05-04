@@ -6,6 +6,7 @@ import type {
   MermaidNodeType,
   MermaidEdgeType,
 } from "@/types/graph";
+import { parseAnnotations } from "./annotations";
 
 /**
  * Parse mermaid flowchart code into a graph model.
@@ -72,12 +73,55 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
     }
   }
 
+  const { annotations } = parseAnnotations(code);
+  applyAnnotations(nodes, edges, annotations);
+
   return {
     diagramType: "flowchart",
     direction,
     nodes: Array.from(nodes.values()),
     edges,
   };
+}
+
+function applyAnnotations(
+  nodes: Map<string, GraphNode>,
+  edges: GraphEdge[],
+  annotations: ReturnType<typeof parseAnnotations>["annotations"]
+) {
+  for (const ann of annotations) {
+    if (ann.kind === "node") {
+      const node = nodes.get(ann.id);
+      if (!node) continue; // tolerate unknown ids
+      if (ann.position) node.position = ann.position;
+      if (ann.size) node.size = ann.size;
+      if (ann.style) node.style = { ...node.style, ...ann.style };
+      if (ann.shape && isMermaidNodeType(ann.shape)) node.type = ann.shape;
+    } else if (ann.kind === "edge") {
+      const edge = edges.find(
+        (e) => e.source === ann.source && e.target === ann.target
+      );
+      if (!edge) continue;
+      if (ann.style) edge.style = { ...edge.style, ...ann.style };
+    }
+    // defaults annotations will be wired in Task 12 (style panel integration)
+  }
+}
+
+const VALID_SHAPES: ReadonlySet<string> = new Set([
+  "default",
+  "decision",
+  "stadium",
+  "subroutine",
+  "cylinder",
+  "circle",
+  "hexagon",
+  "parallelogram",
+  "trapezoid",
+]);
+
+function isMermaidNodeType(value: string): value is MermaidNodeType {
+  return VALID_SHAPES.has(value);
 }
 
 interface ParsedNodeDef {
