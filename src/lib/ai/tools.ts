@@ -1,14 +1,33 @@
 import { z } from "zod";
 
-const mermaidNodeType = z
-  .enum(["default", "decision", "stadium", "subroutine", "cylinder", "circle"])
-  .optional()
-  .default("default");
+const SHAPE_VALUES = [
+  "default",
+  "decision",
+  "stadium",
+  "subroutine",
+  "cylinder",
+  "circle",
+  "hexagon",
+  "parallelogram",
+  "trapezoid",
+] as const;
+
+const mermaidNodeType = z.enum(SHAPE_VALUES).optional().default("default");
 
 const mermaidEdgeType = z
   .enum(["arrow", "dotted", "thick"])
   .optional()
   .default("arrow");
+
+const styleObj = z
+  .object({
+    backgroundColor: z.string().optional(),
+    borderColor: z.string().optional(),
+    fontColor: z.string().optional(),
+    fontFamily: z.string().optional(),
+    fontSize: z.number().optional(),
+  })
+  .optional();
 
 // --- Graph operation tools ---
 
@@ -18,6 +37,15 @@ export const addNodesSchema = z.object({
       id: z.string().describe("Unique node ID (e.g., 'DB', 'auth_service')"),
       label: z.string().describe("Display label for the node"),
       type: mermaidNodeType.describe("Node shape type"),
+      position: z
+        .object({ x: z.number(), y: z.number() })
+        .optional()
+        .describe("Optional position for the node"),
+      size: z
+        .object({ width: z.number(), height: z.number() })
+        .optional()
+        .describe("Optional size for the node"),
+      style: styleObj.describe("Optional per-node style overrides"),
     })
   ),
 });
@@ -33,10 +61,16 @@ export const updateNodesSchema = z.object({
     z.object({
       id: z.string().describe("ID of the node to update"),
       label: z.string().optional().describe("New label"),
-      type: z
-        .enum(["default", "decision", "stadium", "subroutine", "cylinder", "circle"])
+      type: z.enum(SHAPE_VALUES).optional().describe("New shape type"),
+      position: z
+        .object({ x: z.number(), y: z.number() })
         .optional()
-        .describe("New shape type"),
+        .describe("New position for the node"),
+      size: z
+        .object({ width: z.number(), height: z.number() })
+        .optional()
+        .describe("New size for the node"),
+      style: styleObj.describe("New per-node style overrides"),
     })
   ),
 });

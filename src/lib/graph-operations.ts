@@ -4,6 +4,7 @@ import type {
   GraphEdge,
   MermaidNodeType,
   MermaidEdgeType,
+  NodeStyleOverride,
 } from "@/types/graph";
 
 // --- Result type ---
@@ -18,12 +19,18 @@ export interface NodeInput {
   id: string;
   label: string;
   type?: MermaidNodeType;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+  style?: NodeStyleOverride;
 }
 
 export interface NodeUpdate {
   id: string;
   label?: string;
   type?: MermaidNodeType;
+  position?: { x: number; y: number };
+  size?: { width: number; height: number };
+  style?: NodeStyleOverride;
 }
 
 export interface EdgeInput {
@@ -70,7 +77,9 @@ export function applyAddNodes(
     id: n.id,
     label: n.label,
     type: n.type ?? "default",
-    position: { x: 0, y: 0 },
+    position: n.position ?? { x: 0, y: 0 },
+    size: n.size,
+    style: n.style,
   }));
 
   return {
@@ -139,6 +148,9 @@ export function applyUpdateNodes(
           ...node,
           ...(update.label !== undefined && { label: update.label }),
           ...(update.type !== undefined && { type: update.type }),
+          ...(update.position !== undefined && { position: update.position }),
+          ...(update.size !== undefined && { size: update.size }),
+          ...(update.style !== undefined && { style: update.style }),
         };
       }),
     },
