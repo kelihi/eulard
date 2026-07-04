@@ -1,5 +1,5 @@
 steps:
-  # Build the container image with dev-specific and latest tags
+  # Build the container image with prod-specific and latest tags
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -10,19 +10,30 @@ steps:
       - '.'
     id: 'build'
 
-  # Update Cloud Run dev service with the new image
+  # Push images to Artifact Registry before deploying
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:${_TAG}']
+    id: 'push-tag'
+    waitFor: ['build']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:latest']
+    id: 'push-latest'
+    waitFor: ['build']
+
+  # Update Cloud Run prod service with the new image
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
       - 'run'
       - 'services'
       - 'update'
-      - 'eulard-dev'
+      - 'eulard-prod'
       - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/eulard/eulard:${_TAG}'
       - '--region=us-central1'
       - '--project=$PROJECT_ID'
     id: 'deploy'
-    waitFor: ['build']
+    waitFor: ['push-tag']
 
 substitutions:
   _TAG: 'latest'

@@ -38,11 +38,20 @@ export interface GraphEdge {
   style?: EdgeStyleOverride;
 }
 
+export interface GraphSubgraph {
+  id: string;
+  label: string;
+  nodeIds: string[];
+  parentSubgraph?: string;
+}
+
 export interface FlowchartGraph {
   diagramType: "flowchart";
   direction: FlowchartDirection;
   nodes: GraphNode[];
   edges: GraphEdge[];
+  subgraphs: GraphSubgraph[];
+  passthrough?: string[];
 }
 
 export type DiagramGraph = FlowchartGraph;

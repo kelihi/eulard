@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
 import { ChatMessage } from "./chat-message";
 import { downloadPng, downloadSvg, downloadMermaidCode } from "@/lib/export";
@@ -16,6 +16,9 @@ import {
   applyAddEdges,
   applyRemoveEdges,
   applyUpdateEdges,
+  applyAddSubgraph,
+  applyRemoveSubgraph,
+  applyUpdateSubgraph,
 } from "@/lib/graph-operations";
 import {
   addNodesSchema,
@@ -24,17 +27,26 @@ import {
   addEdgesSchema,
   removeEdgesSchema,
   updateEdgesSchema,
+  addSubgraphSchema,
+  removeSubgraphSchema,
+  updateSubgraphSchema,
   replaceDiagramSchema,
 } from "@/lib/ai/tools";
+import { useAISettingsStore } from "@/stores/ai-settings-store";
 import {
   Send,
   Sparkles,
   Loader2,
   CheckCircle2,
+  AlertCircle,
   Plus,
   MessageSquare,
   ChevronDown,
   Trash2,
+  FileText,
+  ChevronUp,
+  X,
+  Pencil,
 } from "lucide-react";
 
 interface ChatSession {
@@ -68,16 +80,49 @@ function maybeEndBatch() {
 
 export function ChatPanel() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
+  const folderId = useDiagramStore((s) => s.diagram?.folderId ?? null);
   const diagramId = useDiagramStore((s) => s.diagram?.id ?? "");
+  const selectedNodeIds = useDiagramStore((s) => s.selectedNodeIds);
+  const selectedEdgeIds = useDiagramStore((s) => s.selectedEdgeIds);
+  const aiSettings = useAISettingsStore();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [showDone, setShowDone] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [sendMode, setSendMode] = useState<"cmd_enter" | "enter">("cmd_enter");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [showSessionList, setShowSessionList] = useState(false);
   const sessionListRef = useRef<HTMLDivElement>(null);
   const autoLoadedRef = useRef(false);
 
-  // Load sessions for current diagram
+  // Context panel state
+  const [userContext, setUserContext] = useState("");
+  const [contextExpanded, setContextExpanded] = useState(false);
+  const contextTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load user send-mode preference
+  useEffect(() => {
+    fetch("/api/preferences")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.sendMode === "enter" || data.sendMode === "cmd_enter") {
+          setSendMode(data.sendMode);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Auto-resize textarea
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = Math.min(el.scrollHeight, 150) + "px";
+    }
+  }, []);
+
+  // Load sessions for current diagram (imperative, for refreshes after chat/delete)
   const loadSessions = useCallback(async () => {
     if (!diagramId) return;
     try {
@@ -91,9 +136,24 @@ export function ChatPanel() {
     }
   }, [diagramId]);
 
+  // Effect-based load with stale-fetch guard to prevent race conditions
+  // when switching diagrams quickly
   useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
+    let cancelled = false;
+    (async () => {
+      if (!diagramId) return;
+      try {
+        const res = await fetch(`/api/chat-sessions?diagramId=${diagramId}`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setSessions(data);
+        }
+      } catch {
+        // Silently fail
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [diagramId]);
 
   // Close session list when clicking outside
   useEffect(() => {
@@ -111,7 +171,17 @@ export function ChatPanel() {
   const { messages, input, handleInputChange, handleSubmit, status, setMessages } =
     useChat({
       api: "/api/ai/chat",
-      body: { currentCode: code, sessionId, diagramId },
+      body: {
+        currentCode: code,
+        folderId,
+        sessionId,
+        diagramId,
+        selectedNodeIds: selectedNodeIds.length > 0 ? selectedNodeIds : undefined,
+        selectedEdgeIds: selectedEdgeIds.length > 0 ? selectedEdgeIds : undefined,
+        maxSteps: aiSettings.maxSteps,
+        model: aiSettings.model,
+        userContext: userContext.trim() || undefined,
+      },
       onToolCall: async ({ toolCall }) => {
         pendingToolCalls++;
         try {
@@ -129,6 +199,7 @@ export function ChatPanel() {
         }
         finishFired = false;
         pendingToolCalls = 0;
+        setChatError(null);
         useDiagramStore.getState().beginBatch();
         useDiagramStore.getState().setSyncState("ai-streaming");
       },
@@ -140,13 +211,24 @@ export function ChatPanel() {
         // Refresh session list after a chat completes
         loadSessions();
       },
-      onError: () => {
+      onError: (error) => {
         useDiagramStore.getState().endBatch();
         useDiagramStore.getState().setSyncState("idle");
+        setChatError(error.message || "AI response was interrupted. Try again.");
+        console.error("[AI Chat Error]", error);
         finishFired = false;
         pendingToolCalls = 0;
       },
     });
+
+  // Handle textarea change (for auto-grow)
+  const handleTextareaChange = useCallback(
+    (e: ChangeEvent<HTMLTextAreaElement>) => {
+      handleInputChange(e);
+      resizeTextarea();
+    },
+    [handleInputChange, resizeTextarea]
+  );
 
   // Reset session when diagram changes
   useEffect(() => {
@@ -220,7 +302,7 @@ export function ChatPanel() {
   return (
     <div className="flex flex-col h-full bg-[var(--background)] border-l border-[var(--border)]">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center gap-2 shrink-0">
+      <div className="px-4 py-3 border-b border-[var(--border)] bg-[var(--background)]/80 backdrop-blur-md flex items-center gap-2 shrink-0">
         <Sparkles className="w-4 h-4 text-[var(--primary)]" />
         <div className="flex-1 min-w-0 relative" ref={sessionListRef}>
           <button
@@ -290,23 +372,43 @@ export function ChatPanel() {
           </div>
         )}
         {messages.map((m) => {
-          if (m.role === "user" || m.role === "assistant") {
-            const textContent =
-              typeof m.content === "string"
-                ? m.content
-                : "";
+          if (m.role === "user") {
+            return (
+              <ChatMessage
+                key={m.id}
+                role="user"
+                content={typeof m.content === "string" ? m.content : ""}
+              />
+            );
+          }
+          if (m.role === "assistant") {
+            // Use parts array (recommended by AI SDK v4) to avoid
+            // truncation when content is empty during tool-call-only steps
+            const textParts = m.parts
+              ?.filter(
+                (p): p is { type: "text"; text: string } => p.type === "text"
+              )
+              .map((p) => p.text)
+              .join("");
+            const textContent = textParts || (typeof m.content === "string" ? m.content : "");
+            const hasToolCalls = m.parts?.some(
+              (p) => p.type === "tool-invocation"
+            );
 
-            if (!textContent) return null;
+            // Skip messages with no text and no tool activity
+            if (!textContent && !hasToolCalls) return null;
 
             return (
               <ChatMessage
                 key={m.id}
-                role={m.role}
-                content={textContent}
+                role="assistant"
+                content={
+                  textContent ||
+                  (hasToolCalls ? "*(modifying diagram...)*" : "")
+                }
                 isStreaming={
                   isLoading &&
-                  m.id === messages[messages.length - 1]?.id &&
-                  m.role === "assistant"
+                  m.id === messages[messages.length - 1]?.id
                 }
               />
             );
@@ -316,47 +418,213 @@ export function ChatPanel() {
 
         {/* Status indicators */}
         {status === "submitted" && (
-          <div className="flex items-center gap-2 px-4 py-2 text-xs text-[var(--muted-foreground)]">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--primary)]" />
+          <div className="flex items-center gap-2 px-4 py-2.5 mx-3 text-xs text-[var(--muted-foreground)] bg-[var(--muted)] rounded-lg">
+            <div className="flex gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-bounce" style={{ animationDelay: "300ms" }} />
+            </div>
             <span>Thinking...</span>
           </div>
         )}
         {status === "streaming" && (
-          <div className="flex items-center gap-2 px-4 py-2 text-xs text-[var(--primary)]">
+          <div className="flex items-center gap-2 px-4 py-2.5 mx-3 text-xs text-[var(--primary)] bg-[var(--primary)]/5 rounded-lg">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             <span>Writing...</span>
           </div>
         )}
         {showDone && !isLoading && (
-          <div className="flex items-center gap-2 px-4 py-2 text-xs text-green-500">
+          <div className="flex items-center gap-2 px-4 py-2.5 mx-3 text-xs text-[var(--success)] bg-[var(--success)]/10 rounded-lg">
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Done</span>
           </div>
         )}
+        {chatError && (
+          <div className="flex items-center gap-2 px-4 py-2.5 text-xs text-red-500 bg-red-500/10 rounded-lg mx-3">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span>{chatError}</span>
+          </div>
+        )}
       </div>
 
-      {/* Input */}
-      <form
-        onSubmit={handleSubmit}
-        className="p-3 border-t border-[var(--border)] shrink-0"
-      >
-        <div className="flex gap-2">
-          <input
-            value={input}
-            onChange={handleInputChange}
-            placeholder="Describe your diagram..."
-            disabled={isLoading}
-            className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50"
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className="px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+      {/* Selection indicator */}
+      {(selectedNodeIds.length > 0 || selectedEdgeIds.length > 0) && (
+        <div className="px-3 py-1.5 border-t border-[var(--border)] bg-[var(--primary)]/10 text-xs text-[var(--primary)] flex items-center gap-1.5">
+          <span className="font-medium">Selection:</span>
+          {selectedNodeIds.length > 0 && (
+            <span>{selectedNodeIds.length} node{selectedNodeIds.length !== 1 ? "s" : ""}</span>
+          )}
+          {selectedNodeIds.length > 0 && selectedEdgeIds.length > 0 && <span>&middot;</span>}
+          {selectedEdgeIds.length > 0 && (
+            <span>{selectedEdgeIds.length} edge{selectedEdgeIds.length !== 1 ? "s" : ""}</span>
+          )}
+          <span className="text-[var(--muted-foreground)] ml-auto">AI will only modify selected</span>
         </div>
-      </form>
+      )}
+
+      {/* Context panel + Input */}
+      <div className="border-t border-[var(--border)] shrink-0">
+        {/* Context toggle bar */}
+        <button
+          type="button"
+          onClick={() => {
+            setContextExpanded(!contextExpanded);
+            if (!contextExpanded) {
+              setTimeout(() => contextTextareaRef.current?.focus(), 50);
+            }
+          }}
+          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-[var(--accent)] transition-colors"
+        >
+          <FileText className="w-3.5 h-3.5 text-[var(--muted-foreground)]" />
+          <span className="text-[var(--muted-foreground)]">
+            {userContext.trim()
+              ? `Context attached (${userContext.trim().split("\n").length} lines)`
+              : "Add context"}
+          </span>
+          {userContext.trim() && (
+            <span className="ml-auto flex items-center gap-1">
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setUserContext("");
+                  setContextExpanded(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.stopPropagation();
+                    setUserContext("");
+                    setContextExpanded(false);
+                  }
+                }}
+                className="p-0.5 rounded hover:bg-[var(--muted)] transition-colors"
+                title="Remove context"
+              >
+                <X className="w-3 h-3 text-[var(--muted-foreground)] hover:text-red-500" />
+              </span>
+            </span>
+          )}
+          {!userContext.trim() && (
+            <span className="ml-auto">
+              {contextExpanded ? (
+                <ChevronDown className="w-3 h-3 text-[var(--muted-foreground)]" />
+              ) : (
+                <ChevronUp className="w-3 h-3 text-[var(--muted-foreground)]" />
+              )}
+            </span>
+          )}
+        </button>
+
+        {/* Collapsible context textarea */}
+        {contextExpanded && (
+          <div className="px-3 pb-2">
+            <div className="relative">
+              <textarea
+                ref={contextTextareaRef}
+                value={userContext}
+                onChange={(e) => setUserContext(e.target.value)}
+                placeholder="Paste requirements, specifications, existing code, or any reference material here. This context will be provided to the AI alongside your messages."
+                className="w-full h-32 px-3 py-2 text-xs font-mono rounded-lg border border-[var(--border)] bg-[var(--muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent resize-y min-h-[80px] max-h-[300px]"
+              />
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px] text-[var(--muted-foreground)]">
+                  {userContext.trim()
+                    ? `${userContext.trim().length.toLocaleString()} chars`
+                    : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setContextExpanded(false)}
+                  className="text-[10px] text-[var(--primary)] hover:underline"
+                >
+                  {userContext.trim() ? "Done" : "Close"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Context badge (collapsed summary) */}
+        {!contextExpanded && userContext.trim() && (
+          <div className="px-3 pb-1">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[var(--primary)]/10 border border-[var(--primary)]/20">
+              <FileText className="w-3 h-3 text-[var(--primary)] shrink-0" />
+              <span className="text-[10px] text-[var(--primary)] truncate flex-1">
+                {userContext.trim().split("\n")[0].substring(0, 60)}
+                {userContext.trim().split("\n")[0].length > 60 ? "..." : ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setContextExpanded(true);
+                  setTimeout(() => contextTextareaRef.current?.focus(), 50);
+                }}
+                className="p-0.5 rounded hover:bg-[var(--primary)]/20 transition-colors"
+                title="Edit context"
+              >
+                <Pencil className="w-2.5 h-2.5 text-[var(--primary)]" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setUserContext("")}
+                className="p-0.5 rounded hover:bg-[var(--primary)]/20 transition-colors"
+                title="Remove context"
+              >
+                <X className="w-2.5 h-2.5 text-[var(--primary)]" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Chat input */}
+        <form
+          onSubmit={handleSubmit}
+          className="p-3 pt-1.5"
+        >
+          <div className="flex gap-2 items-end">
+            <textarea
+              ref={textareaRef}
+              data-chat-input="true"
+              value={input}
+              onChange={handleTextareaChange}
+              onKeyDown={(e) => {
+                if (sendMode === "cmd_enter") {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                } else {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }
+              }}
+              placeholder="Describe your diagram..."
+              disabled={isLoading}
+              rows={1}
+              className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-[var(--border)] bg-[var(--muted)] focus:bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50 resize-none overflow-y-auto transition-all duration-150"
+              style={{ maxHeight: "150px" }}
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim()}
+              title={sendMode === "cmd_enter" ? "Send (Cmd+Enter)" : "Send (Enter)"}
+              className="px-3 py-2.5 bg-[var(--primary)] text-[var(--primary-foreground)] rounded-xl hover:opacity-90 disabled:opacity-50 transition-all duration-150 shrink-0 shadow-sm"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-[10px] text-[var(--muted-foreground)] mt-1">
+            {sendMode === "cmd_enter"
+              ? typeof navigator !== "undefined" && /Mac/i.test(navigator.userAgent)
+                ? "Cmd+Enter to send, Enter for new line"
+                : "Ctrl+Enter to send, Enter for new line"
+              : "Enter to send, Shift+Enter for new line"}
+          </p>
+        </form>
+      </div>
     </div>
   );
 }
@@ -458,6 +726,47 @@ async function handleToolCall(toolCall: { toolName: string; args: unknown }): Pr
     const newCode = graphToMermaid(result.graph);
     useDiagramStore.getState().setCode(newCode);
     return `Updated ${args.updates.length} edge(s)`;
+  }
+
+  // --- Subgraph operation tools ---
+
+  if (toolCall.toolName === "addSubgraph") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = addSubgraphSchema.parse(toolCall.args);
+    const result = applyAddSubgraph(parsed.graph, args);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Added subgraph "${args.id}" with ${args.nodeIds.length} node(s)`;
+  }
+
+  if (toolCall.toolName === "removeSubgraph") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = removeSubgraphSchema.parse(toolCall.args);
+    const result = applyRemoveSubgraph(parsed.graph, args.subgraphId);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Removed subgraph "${args.subgraphId}"`;
+  }
+
+  if (toolCall.toolName === "updateSubgraph") {
+    const parsed = parseGraph();
+    if (!parsed.ok) return parsed.error;
+
+    const args = updateSubgraphSchema.parse(toolCall.args);
+    const result = applyUpdateSubgraph(parsed.graph, args);
+    if (!result.ok) return result.error;
+
+    const newCode = graphToMermaid(result.graph);
+    useDiagramStore.getState().setCode(newCode);
+    return `Updated subgraph "${args.id}"`;
   }
 
   // --- replaceDiagram (escape hatch) ---

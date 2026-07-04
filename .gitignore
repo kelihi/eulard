@@ -43,6 +43,15 @@ next-env.d.ts
 /data/
 *.db
 
+# docker
+docker-compose.override.yml
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 # terraform
 terraform/.terraform/
 terraform/*.tfstate*

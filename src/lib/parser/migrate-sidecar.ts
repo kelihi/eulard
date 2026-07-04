@@ -18,14 +18,14 @@ export function migrateSidecarToCode({
   if (!graph) return code;
 
   let mutated = false;
+  const passthrough = [...(graph.passthrough ?? [])];
 
-  // Bake positions
   if (positions) {
     try {
       const map = JSON.parse(positions) as Record<string, { x: number; y: number }>;
       for (const node of graph.nodes) {
         const p = map[node.id];
-        if (p && (node.position.x === 0 && node.position.y === 0)) {
+        if (p && node.position.x === 0 && node.position.y === 0) {
           node.position = { x: p.x, y: p.y };
           mutated = true;
         }
@@ -35,8 +35,6 @@ export function migrateSidecarToCode({
     }
   }
 
-  // Bake per-object style overrides
-  let defaults = "";
   if (styleOverrides) {
     try {
       const styles = JSON.parse(styleOverrides) as DiagramStyles;
@@ -59,11 +57,15 @@ export function migrateSidecarToCode({
         }
       }
       if (styles.globalNode) {
-        defaults += `    ${serializeAnnotation({ kind: "defaults", scope: "node", style: styles.globalNode })}\n`;
+        passthrough.push(
+          `    ${serializeAnnotation({ kind: "defaults", scope: "node", style: styles.globalNode })}`
+        );
         mutated = true;
       }
       if (styles.globalEdge) {
-        defaults += `    ${serializeAnnotation({ kind: "defaults", scope: "edge", style: styles.globalEdge })}\n`;
+        passthrough.push(
+          `    ${serializeAnnotation({ kind: "defaults", scope: "edge", style: styles.globalEdge })}`
+        );
         mutated = true;
       }
     } catch {
@@ -73,10 +75,8 @@ export function migrateSidecarToCode({
 
   if (!mutated) return code;
 
-  let out = graphToMermaid(graph);
-  if (defaults) {
-    const nl = out.indexOf("\n");
-    out = out.slice(0, nl + 1) + defaults + out.slice(nl + 1);
-  }
-  return out;
+  return graphToMermaid({
+    ...graph,
+    passthrough,
+  });
 }

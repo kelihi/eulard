@@ -1,0 +1,45 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+# NOTE: Workload Identity Federation must be configured in GCP.
+# 1. Create a Workload Identity Pool: github-pool
+# 2. Create a Provider: github-provider (OIDC, issuer: https://token.actions.githubusercontent.com)
+# 3. Grant the service account roles/iam.workloadIdentityUser with the pool
+# 4. Grant the service account roles/cloudbuild.builds.editor, roles/run.admin, etc.
+# See: https://github.com/google-github-actions/auth#setting-up-workload-identity-federation
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build & Deploy to Staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/23815247728/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions@kelihi-ai-platform.iam.gserviceaccount.com
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Submit Cloud Build (build + deploy staging)
+        run: |
+          gcloud builds submit \
+            --config=cloudbuild-staging.yaml \
+            --substitutions="_TAG=staging-${GITHUB_SHA::7}" \
+            --project=kelihi-ai-platform \
+            .

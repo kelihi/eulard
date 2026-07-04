@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useDiagramStore } from "@/stores/diagram-store";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -17,17 +17,70 @@ export default function EditorPage() {
   const loadDiagram = useDiagramStore((s) => s.loadDiagram);
   const diagram = useDiagramStore((s) => s.diagram);
   const [chatOpen, setChatOpen] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("eulard-sidebar-open");
+      return stored !== null ? stored === "true" : true;
+    }
+    return true;
+  });
+  const [codeHidden, setCodeHidden] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("eulard-code-hidden") === "true";
+    }
+    return false;
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useKeyboardShortcuts();
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem("eulard-sidebar-open", String(next));
+      return next;
+    });
+  }, []);
+
+  const toggleCode = useCallback(() => {
+    setCodeHidden((prev) => {
+      const next = !prev;
+      localStorage.setItem("eulard-code-hidden", String(next));
+      return next;
+    });
+  }, []);
+
+  const toggleChat = useCallback(() => {
+    setChatOpen((prev) => {
+      const next = !prev;
+      // Focus the chat input when opening
+      if (next) {
+        setTimeout(() => {
+          const textarea = document.querySelector<HTMLTextAreaElement>(
+            '[data-chat-input="true"]'
+          );
+          textarea?.focus();
+        }, 100);
+      }
+      return next;
+    });
+  }, []);
+
+  useKeyboardShortcuts({
+    onToggleSidebar: toggleSidebar,
+    onToggleCode: toggleCode,
+    onToggleChat: toggleChat,
+  });
 
   useEffect(() => {
     setLoading(true);
     loadDiagram(id)
       .then(() => setLoading(false))
-      .catch(() => {
+      .catch((err) => {
+        // If the session is expired/invalid, redirect to login
+        if (err?.message?.includes("401")) {
+          window.location.href = "/login";
+          return;
+        }
         setError("Failed to load diagram. It may have been deleted or you don't have access.");
         setLoading(false);
       });
@@ -82,14 +135,20 @@ export default function EditorPage() {
     return (
       <div className="h-screen flex overflow-hidden">
         {/* Sidebar skeleton */}
-        <div className="w-56 h-full bg-[var(--muted)] border-r border-[var(--border)] shrink-0">
-          <div className="px-4 py-3 border-b border-[var(--border)]">
-            <div className="h-4 w-20 bg-[var(--border)] rounded animate-pulse" />
-          </div>
-          <div className="p-2 space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-8 bg-[var(--border)] rounded-lg animate-pulse" />
-            ))}
+        <div
+          className={`shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
+            sidebarOpen ? "w-56" : "w-0"
+          }`}
+        >
+          <div className="w-56 h-full bg-[var(--muted)] border-r border-[var(--border)]">
+            <div className="px-4 py-3 border-b border-[var(--border)]">
+              <div className="h-4 w-20 bg-[var(--border)] rounded animate-pulse" />
+            </div>
+            <div className="p-2 space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-8 bg-[var(--border)] rounded-lg animate-pulse" />
+              ))}
+            </div>
           </div>
         </div>
         {/* Main area skeleton */}
@@ -117,18 +176,28 @@ export default function EditorPage() {
 
   return (
     <div className="h-screen flex overflow-hidden">
-      {sidebarOpen && <Sidebar />}
+      <div
+        className={`shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out ${
+          sidebarOpen ? "w-56" : "w-0"
+        }`}
+      >
+        <div className="w-56 h-full">
+          <Sidebar />
+        </div>
+      </div>
       <div className="flex-1 flex flex-col min-w-0">
         <Header
-          onToggleChat={() => setChatOpen(!chatOpen)}
+          onToggleChat={toggleChat}
           chatOpen={chatOpen}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onToggleSidebar={toggleSidebar}
           sidebarOpen={sidebarOpen}
+          onToggleCode={toggleCode}
+          codeHidden={codeHidden}
         />
         <div className="flex-1 flex overflow-hidden">
           <div className="flex-1 min-w-0">
             <ErrorBoundary>
-              <EditorLayout />
+              <EditorLayout codeHidden={codeHidden} />
             </ErrorBoundary>
           </div>
           {chatOpen && (

@@ -109,6 +109,25 @@ export const updateEdgesSchema = z.object({
   ),
 });
 
+// --- Subgraph operation tools ---
+
+export const addSubgraphSchema = z.object({
+  id: z.string().describe("Unique subgraph ID (e.g., 'sg_backend', 'sg_frontend')"),
+  label: z.string().describe("Display label for the subgraph group"),
+  nodeIds: z.array(z.string()).describe("IDs of nodes to include in this subgraph"),
+});
+
+export const removeSubgraphSchema = z.object({
+  subgraphId: z.string().describe("ID of the subgraph to remove (nodes are kept, only grouping is removed)"),
+});
+
+export const updateSubgraphSchema = z.object({
+  id: z.string().describe("ID of the subgraph to update"),
+  label: z.string().optional().describe("New label for the subgraph"),
+  addNodeIds: z.array(z.string()).optional().describe("Node IDs to add to this subgraph"),
+  removeNodeIds: z.array(z.string()).optional().describe("Node IDs to remove from this subgraph"),
+});
+
 // --- Fallback full-replacement tool ---
 
 export const replaceDiagramSchema = z.object({
@@ -138,6 +157,25 @@ export const exportDiagramSchema = z.object({
     .describe("Export format: png, svg, or mermaid code"),
 });
 
+// --- Client context tools (feedback system integration) ---
+
+export const listClientsSchema = z.object({
+  search: z
+    .string()
+    .optional()
+    .describe("Search clients by name"),
+  status: z
+    .enum(["active", "ad-hoc", "churned"])
+    .optional()
+    .describe("Filter by client status"),
+});
+
+export const getClientContextSchema = z.object({
+  clientId: z
+    .string()
+    .describe("UUID of the client to fetch full details for"),
+});
+
 // --- Inferred types ---
 
 export type AddNodesParams = z.infer<typeof addNodesSchema>;
@@ -149,3 +187,8 @@ export type UpdateEdgesParams = z.infer<typeof updateEdgesSchema>;
 export type ReplaceDiagramParams = z.infer<typeof replaceDiagramSchema>;
 export type UpdateMetadataParams = z.infer<typeof updateMetadataSchema>;
 export type ExportDiagramParams = z.infer<typeof exportDiagramSchema>;
+export type ListClientsParams = z.infer<typeof listClientsSchema>;
+export type GetClientContextParams = z.infer<typeof getClientContextSchema>;
+export type AddSubgraphParams = z.infer<typeof addSubgraphSchema>;
+export type RemoveSubgraphParams = z.infer<typeof removeSubgraphSchema>;
+export type UpdateSubgraphParams = z.infer<typeof updateSubgraphSchema>;

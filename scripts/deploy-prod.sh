@@ -1,33 +1,31 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Eulard — Deploy to Cloud Run (dev)
-# Usage: ./scripts/deploy-dev.sh [--build-only | --deploy-only | --image TAG]
+# Eulard — Deploy to Cloud Run (prod)
+# Usage: ./scripts/deploy-prod.sh [--build-only | --deploy-only | --image TAG]
 #
-# This deploys eulard to a Cloud Run service for dev/testing.
-# Production remains on GKE (deployed via scripts/deploy.sh).
+# This deploys eulard to the production Cloud Run service.
 #
 # Modes:
 #   (default)       Build image via Cloud Build, then deploy to Cloud Run
 #   --build-only    Build and push image only, skip deployment
 #   --deploy-only   Deploy using the latest image (skip build)
-#   --image TAG     Deploy a specific image tag (e.g., dev-abc1234)
-#
-# First-time setup:
-#   1. Run: tofu apply -var-file="environments/dev.tfvars" (creates the service)
-#   2. Or run this script (it will create the service if it doesn't exist)
+#   --image TAG     Deploy a specific image tag (e.g., prod-abc1234)
 #
 # Prerequisites:
 #   - gcloud CLI authenticated with access to kelihi-ai-platform
 #   - Secrets populated in Secret Manager (scripts/populate-secrets.sh)
-#   - Cloud SQL instance chassis-db-dev exists with eulard database
+#   - Cloud SQL instance chassis-db-prod exists with eulard database
+#   - Cloud Run service eulard-prod created (this script will create it on first run)
 # =============================================================================
 set -euo pipefail
 
 PROJECT="kelihi-ai-platform"
 REGION="us-central1"
-SERVICE="eulard-dev"
+SERVICE="eulard-prod"
 IMAGE_BASE="us-central1-docker.pkg.dev/${PROJECT}/eulard/eulard"
-CLOUDSQL_CONNECTION="kelihi-ai-platform:us-central1:chassis-db-dev"
+# TODO: Update to chassis-db-prod once the prod Cloud SQL instance is provisioned.
+# For now, this points to the dev database.
+CLOUDSQL_CONNECTION="kelihi-ai-platform:us-central1:chassis-db-prod"
 SERVICE_ACCOUNT="eulard-sa@kelihi-ai-platform.iam.gserviceaccount.com"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -47,7 +45,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "============================================"
-echo "  Eulard Cloud Run Dev Deployment"
+echo "  Eulard Cloud Run PROD Deployment"
 echo "============================================"
 
 # ---- Resolve tag ----
@@ -57,7 +55,7 @@ elif [ "${DEPLOY_ONLY}" = true ]; then
   TAG="latest"
 else
   SHORT_SHA=$(git -C "${ROOT_DIR}" rev-parse --short HEAD 2>/dev/null || echo "local")
-  TAG="dev-${SHORT_SHA}"
+  TAG="prod-${SHORT_SHA}"
 fi
 
 # ---- Build ----
@@ -104,29 +102,31 @@ else
     --service-account="${SERVICE_ACCOUNT}" \
     --allow-unauthenticated \
     --add-cloudsql-instances="${CLOUDSQL_CONNECTION}" \
-    --vpc-connector=chassis-vpc-cx-dev \
+    --vpc-connector=chassis-vpc-cx-prod \
     --vpc-egress=private-ranges-only \
     --port=3000 \
     --cpu=1 \
-    --memory=512Mi \
-    --min-instances=0 \
-    --max-instances=2 \
+    --memory=1Gi \
+    --min-instances=1 \
+    --max-instances=5 \
     --concurrency=80 \
     --timeout=300 \
     --set-env-vars="NODE_ENV=production" \
     --set-env-vars="NEXT_TELEMETRY_DISABLED=1" \
     --set-env-vars="HOSTNAME=0.0.0.0" \
-    --set-env-vars="INSTANCE_CONNECTION_NAME=kelihi-ai-platform:us-central1:chassis-db-dev" \
+    --set-env-vars="INSTANCE_CONNECTION_NAME=kelihi-ai-platform:us-central1:chassis-db-prod" \
     --set-env-vars="DB_NAME=eulard" \
     --set-env-vars="DB_USER=eulard-app" \
     --set-env-vars="AUTH_GOOGLE_ALLOWED_DOMAINS=kelihi.com" \
     --set-env-vars="AUTH_TRUST_HOST=true" \
-    --set-secrets="DB_PASSWORD=eulard-db-password-dev:latest" \
-    --set-secrets="NEXTAUTH_SECRET=eulard-nextauth-secret-dev:latest" \
-    --set-secrets="AUTH_GOOGLE_CLIENT_ID=eulard-google-oauth-client-id-dev:latest" \
-    --set-secrets="AUTH_GOOGLE_CLIENT_SECRET=eulard-google-oauth-client-secret-dev:latest" \
-    --set-secrets="ANTHROPIC_API_KEY=eulard-anthropic-api-key-dev:latest" \
-    --labels="environment=dev,managed-by=script" \
+    --set-env-vars="NEXTAUTH_URL=https://eulard.kelihi.com" \
+    --set-env-vars="AUTH_URL=https://eulard.kelihi.com" \
+    --set-secrets="DB_PASSWORD=eulard-db-password-prod:latest" \
+    --set-secrets="NEXTAUTH_SECRET=eulard-nextauth-secret-prod:latest" \
+    --set-secrets="AUTH_GOOGLE_CLIENT_ID=eulard-google-oauth-client-id-prod:latest" \
+    --set-secrets="AUTH_GOOGLE_CLIENT_SECRET=eulard-google-oauth-client-secret-prod:latest" \
+    --set-secrets="ANTHROPIC_API_KEY=eulard-anthropic-api-key-prod:latest" \
+    --labels="environment=prod,managed-by=script" \
     --quiet
 fi
 

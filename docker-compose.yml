@@ -1,0 +1,62 @@
+# =============================================================================
+# Eulard — Local Development Environment
+# Usage: docker compose up (or ./scripts/local-up.sh for the full flow)
+# =============================================================================
+
+services:
+  # ---------- PostgreSQL 15 (matches Cloud SQL production) ----------
+  postgres:
+    image: postgres:15-alpine
+    container_name: eulard-postgres
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: eulard
+      POSTGRES_USER: eulard-app
+      POSTGRES_PASSWORD: localdev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eulard-app -d eulard"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  # ---------- Next.js dev server with hot-reload ----------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: eulard-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env.local
+    environment:
+      # Override DB connection to point at the docker postgres service
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: eulard
+      DB_USER: eulard-app
+      DB_PASSWORD: localdev
+      DB_SSL: "false"
+      NEXTAUTH_URL: http://localhost:3000
+      AUTH_TRUST_HOST: "true"
+      NODE_ENV: development
+    volumes:
+      # Mount source for hot-reload; exclude node_modules & .next
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./next.config.ts:/app/next.config.ts
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./postcss.config.mjs:/app/postcss.config.mjs
+      - ./.eslintrc.json:/app/.eslintrc.json
+
+volumes:
+  pgdata:
+    driver: local

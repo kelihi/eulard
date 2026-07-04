@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
-  getBezierPath,
+  getSmoothStepPath,
   EdgeLabelRenderer,
   BaseEdge,
   type EdgeProps,
@@ -52,6 +52,7 @@ function EditableEdge({
   data,
   style,
   markerEnd,
+  selected,
 }: EdgeProps) {
   const edgeData = data as unknown as CustomEdgeData;
   const label = edgeData?.edgeLabel ?? "";
@@ -63,13 +64,14 @@ function EditableEdge({
   const [isHovered, setIsHovered] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
     targetX,
     targetY,
     sourcePosition,
     targetPosition,
+    borderRadius: 8,
   });
 
   useEffect(() => {
@@ -118,7 +120,11 @@ function EditableEdge({
       <BaseEdge
         id={id}
         path={edgePath}
-        style={{ ...style, ...pathStyle }}
+        style={{
+          ...style,
+          ...pathStyle,
+          ...(selected ? { stroke: "var(--primary)", strokeWidth: 3 } : {}),
+        }}
         markerEnd={markerEnd}
       />
       <EdgeLabelRenderer>
@@ -143,7 +149,7 @@ function EditableEdge({
           ) : label ? (
             <div
               onDoubleClick={handleDoubleClick}
-              className="cursor-pointer rounded bg-[var(--background)] px-2 py-0.5 text-xs text-[var(--foreground)] border border-[var(--border)] shadow-sm hover:border-[var(--primary)] transition-colors"
+              className="cursor-pointer rounded-full bg-[var(--background)] px-2.5 py-1 text-xs text-[var(--foreground)] border border-[var(--border)] shadow-[0_1px_3px_rgba(0,0,0,0.06)] hover:border-[var(--primary)] hover:shadow-[0_2px_6px_rgba(99,102,241,0.1)] transition-all duration-150"
               style={{ fontSize: "11px", ...labelStyle }}
             >
               {label}
@@ -151,8 +157,8 @@ function EditableEdge({
           ) : (
             <div
               onDoubleClick={handleDoubleClick}
-              className={`cursor-pointer rounded bg-[var(--background)] px-1.5 py-0.5 text-xs transition-opacity ${
-                isHovered ? "opacity-70" : "opacity-0"
+              className={`cursor-pointer rounded-full bg-[var(--background)] px-2 py-0.5 text-xs border border-transparent transition-all duration-150 ${
+                isHovered ? "opacity-70 border-[var(--border)]" : "opacity-0"
               }`}
               style={{ fontSize: "10px" }}
             >

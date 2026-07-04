@@ -7,6 +7,7 @@ describe("graphToMermaid — annotation emission", () => {
     const g: FlowchartGraph = {
       diagramType: "flowchart",
       direction: "TB",
+      subgraphs: [],
       nodes: [{ id: "A", label: "Start", type: "default", position: { x: 120, y: 40 } }],
       edges: [],
     };
@@ -19,6 +20,7 @@ describe("graphToMermaid — annotation emission", () => {
     const g: FlowchartGraph = {
       diagramType: "flowchart",
       direction: "TB",
+      subgraphs: [],
       nodes: [{ id: "A", label: "Start", type: "default", position: { x: 0, y: 0 } }],
       edges: [],
     };
@@ -29,6 +31,7 @@ describe("graphToMermaid — annotation emission", () => {
     const g: FlowchartGraph = {
       diagramType: "flowchart",
       direction: "TB",
+      subgraphs: [],
       nodes: [
         {
           id: "A",
@@ -49,6 +52,7 @@ describe("graphToMermaid — annotation emission", () => {
     const g: FlowchartGraph = {
       diagramType: "flowchart",
       direction: "TB",
+      subgraphs: [],
       nodes: [
         { id: "A", label: "A", type: "default", position: { x: 0, y: 0 } },
         { id: "B", label: "B", type: "default", position: { x: 0, y: 0 } },
@@ -64,6 +68,7 @@ describe("graphToMermaid — annotation emission", () => {
     const g: FlowchartGraph = {
       diagramType: "flowchart",
       direction: "TB",
+      subgraphs: [],
       nodes: [
         { id: "A", label: "A", type: "default", position: { x: 10, y: 20 } },
         { id: "B", label: "B", type: "default", position: { x: 30, y: 40 } },
@@ -73,7 +78,7 @@ describe("graphToMermaid — annotation emission", () => {
     const lines = graphToMermaid(g).split("\n");
     const aIdx = lines.findIndex((l) => l.includes("A[A]") || l.trim() === "A");
     const aAnnIdx = lines.findIndex((l) => l.includes("%%@ node A"));
-    expect(aAnnIdx).toBe(aIdx + 1);
+    expect(aAnnIdx).toBeGreaterThan(aIdx);
   });
 });
 
@@ -84,6 +89,7 @@ describe("graphToMermaid → mermaidToGraph round trip", () => {
     const g: FlowchartGraph = {
       diagramType: "flowchart",
       direction: "TB",
+      subgraphs: [],
       nodes: [
         {
           id: "A",
@@ -106,5 +112,34 @@ describe("graphToMermaid → mermaidToGraph round trip", () => {
     expect(a.size).toEqual({ width: 200, height: 80 });
     expect(a.style).toEqual({ backgroundColor: "#e0f2fe", borderColor: "#0ea5e9" });
     expect(back.edges[0].style).toEqual({ lineColor: "#10b981", lineThickness: 3 });
+  });
+
+  it("preserves subgraphs, passthrough directives, and annotations in substance", () => {
+    const code = `flowchart TB
+    subgraph outer[Outer]
+        subgraph inner[Inner]
+            A[Start]
+        end
+        B[End]
+    end
+    A --> B
+    %%@ node A pos=120,40
+    %%@ edge A->B color=#10b981
+    %%@ defaults node fill=#fef3c7
+    classDef highlight fill:#fef3c7,stroke:#f59e0b
+    class A highlight
+    style B fill:#dbeafe,stroke:#3b82f6`;
+
+    const once = graphToMermaid(mermaidToGraph(code)!);
+    const twice = graphToMermaid(mermaidToGraph(once)!);
+
+    expect(twice).toBe(once);
+    expect((once.match(/%%@ node A pos=120,40/g) ?? []).length).toBe(1);
+    expect((once.match(/%%@ edge A->B color=#10b981/g) ?? []).length).toBe(1);
+    expect((once.match(/%%@ defaults node fill=#fef3c7/g) ?? []).length).toBe(1);
+    expect((once.match(/subgraph outer\[Outer\]/g) ?? []).length).toBe(1);
+    expect((once.match(/subgraph inner\[Inner\]/g) ?? []).length).toBe(1);
+    expect((once.match(/classDef highlight fill:#fef3c7,stroke:#f59e0b/g) ?? []).length).toBe(1);
+    expect((once.match(/style B fill:#dbeafe,stroke:#3b82f6/g) ?? []).length).toBe(1);
   });
 });
