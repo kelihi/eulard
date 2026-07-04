@@ -1,5 +1,6 @@
+import type { CSSProperties } from "react";
 import type { Node, Edge } from "@xyflow/react";
-import type { FlowchartGraph, NodeStyleOverride } from "@/types/graph";
+import type { FlowchartGraph, NodeStyleOverride, EdgeStyleOverride } from "@/types/graph";
 
 /**
  * Split a label on <br/>, <br>, or <br /> tags and return an array of lines.
@@ -36,6 +37,28 @@ export interface FlowEdgeData {
   [key: string]: unknown;
 }
 
+function nodeStyleToCss(style?: NodeStyleOverride): CSSProperties {
+  if (!style) return {};
+  const css: CSSProperties = {};
+  if (style.backgroundColor) css.backgroundColor = style.backgroundColor;
+  if (style.borderColor) css.borderColor = style.borderColor;
+  if (style.fontFamily) css.fontFamily = style.fontFamily;
+  if (style.fontSize) css.fontSize = `${style.fontSize}px`;
+  if (style.fontColor) css.color = style.fontColor;
+  return css;
+}
+
+function edgeStyleToCss(style?: EdgeStyleOverride): CSSProperties {
+  if (!style) return {};
+  const css: CSSProperties = {};
+  if (style.lineColor) css.stroke = style.lineColor;
+  if (style.lineThickness) css.strokeWidth = style.lineThickness;
+  if (style.fontFamily) css.fontFamily = style.fontFamily;
+  if (style.fontSize) css.fontSize = `${style.fontSize}px`;
+  if (style.fontColor) css.color = style.fontColor;
+  return css;
+}
+
 /**
  * Convert a flowchart graph to React Flow nodes and edges.
  */
@@ -59,26 +82,29 @@ export function graphToReactFlow(
       width = base.width;
       height = base.height;
       if (n.type === "decision") {
-        // Diamond needs more space: text area is roughly half the diamond dimensions
         width = Math.max(120, base.width * 1.6);
         height = Math.max(80, base.height * 1.6);
       } else if (n.type === "circle") {
-        // Circle diameter should fit the content diagonally
         const diameter = Math.max(64, Math.ceil(Math.sqrt(base.width * base.width + base.height * base.height) * 0.75));
         width = diameter;
         height = diameter;
       }
     }
+
     return {
       id: n.id,
-      type: n.type, // maps to custom nodeTypes
+      type: n.type,
       position: n.position,
       width,
       height,
+      style: nodeStyleToCss({ ...graph.globalNodeStyle, ...n.style }),
       data: {
         label: n.label,
         mermaidType: n.type,
-        style: n.style,
+        style: {
+          ...graph.globalNodeStyle,
+          ...n.style,
+        },
         onRenameNode,
         isLocked,
       },
@@ -91,7 +117,11 @@ export function graphToReactFlow(
     target: e.target,
     type: "custom",
     animated: e.type === "dotted",
-    style: e.type === "thick" ? { strokeWidth: 3 } : undefined,
+    style: {
+      ...(e.type === "thick" ? { strokeWidth: 3 } : {}),
+      ...edgeStyleToCss(graph.globalEdgeStyle),
+      ...edgeStyleToCss(e.style),
+    },
     data: {
       edgeLabel: e.label ?? "",
       edgeId: e.id,

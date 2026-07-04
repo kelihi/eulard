@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
-import type { DiagramStyles, NodeStyleOverride, EdgeStyleOverride } from "@/types/graph";
-import { parseAnnotations } from "@/lib/parser/annotations";
+import type { DiagramStyles } from "@/types/graph";
+import { parseAnnotations, stylesFromCode } from "@/lib/parser/annotations";
 import {
   ZoomIn,
   ZoomOut,
@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  AlertCircle,
 } from "lucide-react";
 
 let mermaidInstance: typeof import("mermaid") | null = null;
@@ -222,6 +223,7 @@ export function MermaidPreview() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const malformedAnnotations = useMemo(() => parseAnnotations(code).malformed, [code]);
   const generationRef = useRef(0);
 
   // Zoom/pan state
@@ -563,6 +565,18 @@ export function MermaidPreview() {
         </div>
       )}
 
+      {!parseError && malformedAnnotations.length > 0 && (
+        <div
+          className="px-3 py-1.5 text-xs bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-b border-amber-200 dark:border-amber-900 shrink-0 flex items-center gap-1"
+          title={malformedAnnotations
+            .map((entry) => `Line ${entry.lineNumber}: ${entry.reason}`)
+            .join("\n")}
+        >
+          <AlertCircle size={12} />
+          {malformedAnnotations.length} malformed annotation{malformedAnnotations.length === 1 ? "" : "s"}
+        </div>
+      )}
+
       {/* Zoomable/pannable viewport */}
       <div
         ref={viewportRef}
@@ -606,49 +620,31 @@ export function MermaidPreview() {
 }
 
 /**
- * Build a DiagramStyles view from sidecar JSON + `%%@` annotations in code.
- * Sidecar is applied first (legacy support), then annotations layer on top.
+ * Build a DiagramStyles view from legacy sidecar JSON, then layer code
+ * annotations on top.
  */
-function stylesFromCodeAndSidecar(
+export function stylesFromCodeAndSidecar(
   code: string,
   styleOverridesJson: string | null
 ): DiagramStyles {
   const result: DiagramStyles = {};
-
-  // Start with sidecar (legacy support)
   if (styleOverridesJson) {
     try {
-      Object.assign(result, JSON.parse(styleOverridesJson) as DiagramStyles);
+      const parsed = JSON.parse(styleOverridesJson) as DiagramStyles;
+      result.globalNode = { ...parsed.globalNode };
+      result.globalEdge = { ...parsed.globalEdge };
+      result.nodes = { ...parsed.nodes };
+      result.edges = { ...parsed.edges };
     } catch {
       // ignore invalid JSON
     }
   }
 
-  // Layer in annotations from code
-  const { annotations } = parseAnnotations(code);
-  for (const ann of annotations) {
-    if (ann.kind === "defaults" && ann.scope === "node") {
-      result.globalNode = {
-        ...result.globalNode,
-        ...(ann.style as NodeStyleOverride),
-      };
-    } else if (ann.kind === "defaults" && ann.scope === "edge") {
-      result.globalEdge = {
-        ...result.globalEdge,
-        ...(ann.style as EdgeStyleOverride),
-      };
-    } else if (ann.kind === "node" && ann.style) {
-      result.nodes = {
-        ...result.nodes,
-        [ann.id]: { ...result.nodes?.[ann.id], ...ann.style },
-      };
-    } else if (ann.kind === "edge" && ann.style) {
-      const edgeKey = `${ann.source}->${ann.target}`;
-      result.edges = {
-        ...result.edges,
-        [edgeKey]: { ...result.edges?.[edgeKey], ...ann.style },
-      };
-    }
-  }
-  return result;
+  const codeStyles = stylesFromCode(code);
+  return {
+    globalNode: { ...result.globalNode, ...codeStyles.globalNode },
+    globalEdge: { ...result.globalEdge, ...codeStyles.globalEdge },
+    nodes: { ...result.nodes, ...codeStyles.nodes },
+    edges: { ...result.edges, ...codeStyles.edges },
+  };
 }

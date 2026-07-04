@@ -80,6 +80,41 @@ describe("graphToMermaid — annotation emission", () => {
     const aAnnIdx = lines.findIndex((l) => l.includes("%%@ node A"));
     expect(aAnnIdx).toBeGreaterThan(aIdx);
   });
+
+  it("emits positions for every node once any node is positioned", () => {
+    const g: FlowchartGraph = {
+      diagramType: "flowchart",
+      direction: "TB",
+      subgraphs: [],
+      nodes: [
+        { id: "A", label: "A", type: "default", position: { x: 0, y: 0 } },
+        { id: "B", label: "B", type: "default", position: { x: 12, y: 18 } },
+      ],
+      edges: [],
+    };
+    const code = graphToMermaid(g);
+    expect(code).toContain("%%@ node A pos=0,0");
+    expect(code).toContain("%%@ node B pos=12,18");
+  });
+
+  it("renders native Mermaid shapes for hexagon, parallelogram, and trapezoid", () => {
+    const g: FlowchartGraph = {
+      diagramType: "flowchart",
+      direction: "TB",
+      subgraphs: [],
+      nodes: [
+        { id: "H", label: "Hex", type: "hexagon", position: { x: 0, y: 0 } },
+        { id: "P", label: "Para", type: "parallelogram", position: { x: 0, y: 0 } },
+        { id: "T", label: "Trap", type: "trapezoid", position: { x: 0, y: 0 } },
+      ],
+      edges: [],
+    };
+    const code = graphToMermaid(g);
+    expect(code).toContain("H{{Hex}}");
+    expect(code).toContain("P[/Para/]");
+    expect(code).toContain("T[/Trap\\]");
+    expect(code).not.toContain("shape=");
+  });
 });
 
 import { mermaidToGraph } from "./mermaid-to-graph";

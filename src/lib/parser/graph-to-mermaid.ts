@@ -14,6 +14,9 @@ import type { NodeAnnotation, EdgeAnnotation } from "@/types/annotations";
  */
 export function graphToMermaid(graph: FlowchartGraph): string {
   const lines: string[] = [];
+  const emitPositions = graph.nodes.some(
+    (n) => n.position.x !== 0 || n.position.y !== 0
+  );
 
   lines.push(`flowchart ${graph.direction}`);
 
@@ -88,7 +91,7 @@ export function graphToMermaid(graph: FlowchartGraph): string {
 
   const annotationLines: string[] = [];
   for (const node of graph.nodes) {
-    const ann = nodeAnnotation(node);
+    const ann = nodeAnnotation(node, emitPositions);
     if (ann) annotationLines.push(`    ${serializeAnnotation(ann)}`);
   }
   for (const edge of graph.edges) {
@@ -121,8 +124,11 @@ function nodeToMermaid(node: GraphNode): string {
     case "circle":
       return `${id}((${label}))`;
     case "hexagon":
+      return `${id}{{${label}}}`;
     case "parallelogram":
+      return `${id}[/${label}/]`;
     case "trapezoid":
+      return `${id}[/${label}\\]`;
     case "default":
     default:
       return label !== id ? `${id}[${label}]` : id;
@@ -150,20 +156,18 @@ function edgeArrow(type: GraphEdge["type"]): string {
   }
 }
 
-const NON_NATIVE_SHAPES = new Set(["hexagon", "parallelogram", "trapezoid"]);
-
-function nodeAnnotation(node: GraphNode): NodeAnnotation | null {
-  const hasPosition = node.position.x !== 0 || node.position.y !== 0;
+function nodeAnnotation(
+  node: GraphNode,
+  emitPositions: boolean
+): NodeAnnotation | null {
   const hasSize = !!node.size;
   const hasStyle = !!node.style && Object.values(node.style).some((v) => v != null && v !== "");
-  const needsShape = NON_NATIVE_SHAPES.has(node.type);
 
-  if (!hasPosition && !hasSize && !hasStyle && !needsShape) return null;
+  if (!emitPositions && !hasSize && !hasStyle) return null;
 
   const ann: NodeAnnotation = { kind: "node", id: node.id };
-  if (hasPosition) ann.position = node.position;
+  if (emitPositions) ann.position = node.position;
   if (hasSize) ann.size = node.size;
-  if (needsShape) ann.shape = node.type;
   if (hasStyle) ann.style = node.style as NodeStyleOverride;
   return ann;
 }

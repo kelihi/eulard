@@ -6,6 +6,7 @@ import { CodeEditor } from "./code-editor";
 import { MermaidPreview } from "./mermaid-preview";
 import { StylePanel } from "./style-panel";
 import { Maximize2, Minimize2, Paintbrush } from "lucide-react";
+import { useDiagramStore } from "@/stores/diagram-store";
 
 // Lazy-load React Flow canvas (heavy dependency)
 const VisualCanvas = dynamic(
@@ -25,6 +26,8 @@ export function EditorLayout({ codeHidden = false }: EditorLayoutProps) {
   const [splitPercent, setSplitPercent] = useState(50);
   const [fullscreenPane, setFullscreenPane] = useState<FullscreenPane>(null);
   const [stylePanelOpen, setStylePanelOpen] = useState(false);
+  const selectedNodeIds = useDiagramStore((s) => s.selectedNodeIds);
+  const selectedEdgeIds = useDiagramStore((s) => s.selectedEdgeIds);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
 
@@ -183,7 +186,10 @@ export function EditorLayout({ codeHidden = false }: EditorLayoutProps) {
           <>
             <div className="w-px bg-[var(--border)] shrink-0" />
             <div className="w-[260px] shrink-0 h-full bg-[var(--background)] border-l border-[var(--border)]">
-              <StylePanel />
+              <StylePanel
+                selectedNodeId={selectedNodeIds[0] ?? null}
+                selectedEdgeId={selectedEdgeIds[0] ?? null}
+              />
             </div>
           </>
         )}

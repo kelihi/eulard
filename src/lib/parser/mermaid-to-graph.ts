@@ -31,6 +31,8 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
   const edges: GraphEdge[] = [];
   const subgraphs: GraphSubgraph[] = [];
   const passthrough: string[] = [];
+  let globalNodeStyle: FlowchartGraph["globalNodeStyle"];
+  let globalEdgeStyle: FlowchartGraph["globalEdgeStyle"];
   let edgeCounter = 0;
 
   const subgraphStack: {
@@ -110,8 +112,17 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
     }
 
     if (line.startsWith("%%@")) {
-      if (/^(?:%%@\s+(?:node|edge)\b)/i.test(line)) {
+      const annMatch = line.match(/^\s*%%@\s+(\S+)/);
+      const kind = annMatch?.[1]?.toLowerCase();
+      if (kind === "node" || kind === "edge") {
         continue;
+      }
+      if (kind === "defaults") {
+        const parsed = parseAnnotations(rawLine).annotations[0];
+        if (parsed?.kind === "defaults") {
+          if (parsed.scope === "node") globalNodeStyle = parsed.style;
+          else globalEdgeStyle = parsed.style;
+        }
       }
       passthrough.push(rawLine);
       continue;
@@ -142,6 +153,8 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
     edges,
     subgraphs,
     passthrough,
+    globalNodeStyle,
+    globalEdgeStyle,
   };
 }
 
@@ -216,7 +229,9 @@ function parseNodeDef(text: string): ParsedNodeDef | null {
     regex: RegExp;
     type: MermaidNodeType;
   }> = [
-    { regex: /^(\w+)\{\{(.+?)\}\}/, type: "default" },
+    { regex: /^(\w+)\{\{(.+?)\}\}/, type: "hexagon" },
+    { regex: /^(\w+)\[\/(.+?)\/\]/, type: "parallelogram" },
+    { regex: /^(\w+)\[\/(.+?)\\\]/, type: "trapezoid" },
     { regex: /^(\w+)\[\[(.+?)\]\]/, type: "subroutine" },
     { regex: /^(\w+)\[\((.+?)\)\]/, type: "cylinder" },
     { regex: /^(\w+)\(\((.+?)\)\)/, type: "circle" },
@@ -247,7 +262,9 @@ function extractNode(text: string): { node: ParsedNodeDef; rest: string } | null
     regex: RegExp;
     type: MermaidNodeType;
   }> = [
-    { regex: /^(\w+)\{\{(.+?)\}\}/, type: "default" },
+    { regex: /^(\w+)\{\{(.+?)\}\}/, type: "hexagon" },
+    { regex: /^(\w+)\[\/(.+?)\/\]/, type: "parallelogram" },
+    { regex: /^(\w+)\[\/(.+?)\\\]/, type: "trapezoid" },
     { regex: /^(\w+)\[\[(.+?)\]\]/, type: "subroutine" },
     { regex: /^(\w+)\[\((.+?)\)\]/, type: "cylinder" },
     { regex: /^(\w+)\(\((.+?)\)\)/, type: "circle" },

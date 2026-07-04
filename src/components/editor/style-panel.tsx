@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
+import { mermaidToGraph } from "@/lib/parser/mermaid-to-graph";
 import { stylesFromCode } from "@/lib/parser/annotations";
 import type {
   NodeStyleOverride,
@@ -339,15 +340,11 @@ function ObjectStyleSection({
 interface StylePanelProps {
   selectedNodeId?: string | null;
   selectedEdgeId?: string | null;
-  nodeLabels?: Record<string, string>;
-  edgeLabels?: Record<string, string>;
 }
 
 export function StylePanel({
   selectedNodeId,
   selectedEdgeId,
-  nodeLabels = {},
-  edgeLabels = {},
 }: StylePanelProps) {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
   const setGlobalNodeStyle = useDiagramStore((s) => s.setGlobalNodeStyle);
@@ -358,11 +355,30 @@ export function StylePanel({
   // Derive the displayed DiagramStyles from the current code.
   // Re-runs whenever `code` changes, so the panel stays in sync with edits
   // made elsewhere (canvas color picker, AI tools, manual code edits).
+  const diagramGraph = useMemo(() => mermaidToGraph(code), [code]);
   const styles = useMemo(() => stylesFromCode(code), [code]);
-  const globalNode = styles.globalNode ?? {};
-  const globalEdge = styles.globalEdge ?? {};
-  const nodeOverrides = styles.nodes ?? {};
-  const edgeOverrides = styles.edges ?? {};
+  const graphLabels = useMemo(() => {
+    return {
+      nodeLabels: Object.fromEntries(
+        diagramGraph?.nodes.map((node) => [node.id, node.label]) ?? []
+      ) as Record<string, string>,
+      edgeLabels: Object.fromEntries(
+        diagramGraph?.edges.map((edge) => [
+          `${edge.source}->${edge.target}`,
+          edge.label ?? `${edge.source} → ${edge.target}`,
+        ]) ?? []
+      ) as Record<string, string>,
+    };
+  }, [diagramGraph]);
+  const selectedEdgeKey = useMemo(() => {
+    if (!selectedEdgeId || !diagramGraph) return null;
+    const edge = diagramGraph.edges.find((e) => e.id === selectedEdgeId);
+    return edge ? `${edge.source}->${edge.target}` : null;
+  }, [diagramGraph, selectedEdgeId]);
+  const globalNode = useMemo(() => styles.globalNode ?? {}, [styles.globalNode]);
+  const globalEdge = useMemo(() => styles.globalEdge ?? {}, [styles.globalEdge]);
+  const nodeOverrides = useMemo(() => styles.nodes ?? {}, [styles.nodes]);
+  const edgeOverrides = useMemo(() => styles.edges ?? {}, [styles.edges]);
 
   const updateGlobalNode = useCallback(
     (patch: Partial<NodeStyleOverride>) => {
@@ -408,13 +424,19 @@ export function StylePanel({
 
   const addSelectedNodeOverride = useCallback(() => {
     if (!selectedNodeId) return;
-    setNodeStyle(selectedNodeId, nodeOverrides[selectedNodeId] ?? {});
-  }, [selectedNodeId, nodeOverrides, setNodeStyle]);
+    setNodeStyle(selectedNodeId, {
+      ...globalNode,
+      ...(nodeOverrides[selectedNodeId] ?? {}),
+    });
+  }, [selectedNodeId, globalNode, nodeOverrides, setNodeStyle]);
 
   const addSelectedEdgeOverride = useCallback(() => {
-    if (!selectedEdgeId) return;
-    setEdgeStyle(selectedEdgeId, edgeOverrides[selectedEdgeId] ?? {});
-  }, [selectedEdgeId, edgeOverrides, setEdgeStyle]);
+    if (!selectedEdgeKey) return;
+    setEdgeStyle(selectedEdgeKey, {
+      ...globalEdge,
+      ...(edgeOverrides[selectedEdgeKey] ?? {}),
+    });
+  }, [selectedEdgeKey, globalEdge, edgeOverrides, setEdgeStyle]);
 
   const resetAll = useCallback(() => {
     setGlobalNodeStyle({});
@@ -556,15 +578,15 @@ export function StylePanel({
                 onClick={addSelectedNodeOverride}
                 className="text-xs px-2 py-0.5 rounded border border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
               >
-                + Style &quot;{nodeLabels[selectedNodeId] ?? selectedNodeId}&quot;
+                + Style &quot;{graphLabels.nodeLabels[selectedNodeId] ?? selectedNodeId}&quot;
               </button>
             )}
-            {selectedEdgeId && !edgeOverrides[selectedEdgeId] && (
+            {selectedEdgeKey && !edgeOverrides[selectedEdgeKey] && (
               <button
                 onClick={addSelectedEdgeOverride}
                 className="text-xs px-2 py-0.5 rounded border border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
               >
-                + Style edge &quot;{edgeLabels[selectedEdgeId] ?? selectedEdgeId}&quot;
+                + Style edge &quot;{graphLabels.edgeLabels[selectedEdgeKey] ?? selectedEdgeKey}&quot;
               </button>
             )}
             {!selectedNodeId && !selectedEdgeId && !hasNodeOverrides && !hasEdgeOverrides && (
@@ -580,7 +602,7 @@ export function StylePanel({
               key={`node-${id}`}
               title="Node"
               objectId={id}
-              objectLabel={nodeLabels[id] ?? id}
+              objectLabel={graphLabels.nodeLabels[id] ?? id}
               nodeStyle={style}
               isEdge={false}
               onUpdateNodeStyle={updateNodeStyle}
@@ -595,7 +617,7 @@ export function StylePanel({
               key={`edge-${id}`}
               title="Edge"
               objectId={id}
-              objectLabel={edgeLabels[id] ?? id}
+              objectLabel={graphLabels.edgeLabels[id] ?? id}
               edgeStyle={style}
               isEdge={true}
               onUpdateNodeStyle={updateNodeStyle}

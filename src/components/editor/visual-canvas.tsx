@@ -58,6 +58,8 @@ function VisualCanvasInner() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
   const setCode = useDiagramStore((s) => s.setCode);
   const syncState = useDiagramStore((s) => s.syncState);
+  const setSelectedNodeIds = useDiagramStore((s) => s.setSelectedNodeIds);
+  const setSelectedEdgeIds = useDiagramStore((s) => s.setSelectedEdgeIds);
 
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -352,8 +354,11 @@ function VisualCanvasInner() {
       setEdges((prev) =>
         prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
       );
+      setSelection({ nodeId: null, edgeId: null });
+      setSelectedNodeIds([]);
+      setSelectedEdgeIds([]);
     },
-    [isLocked, syncGraphToCode]
+    [isLocked, syncGraphToCode, setSelectedEdgeIds, setSelectedNodeIds]
   );
 
   const handleNodeChangeShape = useCallback(
@@ -438,18 +443,22 @@ function VisualCanvasInner() {
       setSelection((prev) =>
         prev.edgeId === edgeId ? { ...prev, edgeId: null } : prev
       );
+      setSelectedEdgeIds([]);
     },
-    [isLocked, syncGraphToCode]
+    [isLocked, syncGraphToCode, setSelectedEdgeIds]
   );
 
   const onSelectionChange = useCallback(
     (sel: { nodes: Node[]; edges: Edge[] }) => {
-      setSelection({
+      const nextSelection = {
         nodeId: sel.nodes[0]?.id ?? null,
         edgeId: sel.edges[0]?.id ?? null,
-      });
+      };
+      setSelection(nextSelection);
+      setSelectedNodeIds(sel.nodes.map((n) => n.id));
+      setSelectedEdgeIds(sel.edges.map((e) => e.id));
     },
-    []
+    [setSelectedEdgeIds, setSelectedNodeIds]
   );
 
   // Close context menu on pane click

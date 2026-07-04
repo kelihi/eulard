@@ -52,6 +52,8 @@ export interface FlowchartGraph {
   edges: GraphEdge[];
   subgraphs: GraphSubgraph[];
   passthrough?: string[];
+  globalNodeStyle?: NodeStyleOverride;
+  globalEdgeStyle?: EdgeStyleOverride;
 }
 
 export type DiagramGraph = FlowchartGraph;

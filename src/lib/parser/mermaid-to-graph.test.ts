@@ -45,6 +45,33 @@ describe("mermaidToGraph — annotation merging", () => {
     expect(g.nodes.find((n) => n.id === "A")!.type).toBe("hexagon");
   });
 
+  it("parses native Mermaid hexagon, parallelogram, and trapezoid shapes", () => {
+    const code = `flowchart TB
+    H{{Hex}}
+    P[/Para/]
+    T[/Trap\\]
+    H --> P --> T`;
+    const g = mermaidToGraph(code)!;
+    expect(g.nodes.find((n) => n.id === "H")!.type).toBe("hexagon");
+    expect(g.nodes.find((n) => n.id === "P")!.type).toBe("parallelogram");
+    expect(g.nodes.find((n) => n.id === "T")!.type).toBe("trapezoid");
+  });
+
+  it("captures defaults annotations as render-only graph styles", () => {
+    const code = `flowchart TB
+    A[Start]
+    %%@ defaults node fill=#e0f2fe stroke=#0ea5e9
+    %%@ defaults edge lineColor=#10b981`;
+    const g = mermaidToGraph(code)!;
+    expect(g.globalNodeStyle).toEqual({
+      backgroundColor: "#e0f2fe",
+      borderColor: "#0ea5e9",
+    });
+    expect(g.globalEdgeStyle).toEqual({
+      lineColor: "#10b981",
+    });
+  });
+
   it("populates edge style from directive", () => {
     const code = `flowchart TB
     A --> B
