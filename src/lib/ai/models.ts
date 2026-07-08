@@ -77,6 +77,11 @@ export async function getAvailableModels(force = false): Promise<ModelOption[]> 
     return cachedModels;
   }
 
+  if (force) {
+    cachedModels = null;
+    cachedAt = 0;
+  }
+
   if (pendingPromise) {
     return pendingPromise;
   }
