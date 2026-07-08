@@ -1,0 +1,27 @@
+# https://docs.devin.ai/onboard-devin/environment-yaml
+# Eulard is a Next.js 15 app that uses pnpm via corepack.
+initialize: |
+  # pnpm is invoked through `corepack pnpm` because the global corepack enable
+  # step requires root permissions we don't have. Node's corepack is available.
+  corepack pnpm --version
+
+maintenance: |
+  corepack pnpm install
+
+knowledge:
+  - name: notes
+    contents: |
+      - Node package manager is pnpm (packageManager: pnpm@9.15.1). Use `corepack pnpm ...`.
+      - AI features require `ANTHROPIC_API_KEY`. For local DB, run `docker compose up` or `npm run local:up` and copy `.env.local.example` to `.env.local`.
+  - name: lint
+    contents: |
+      corepack pnpm run lint
+  - name: test
+    contents: |
+      corepack pnpm run test:run
+  - name: build
+    contents: |
+      corepack pnpm run build
+  - name: typecheck
+    contents: |
+      npx tsc --noEmit
