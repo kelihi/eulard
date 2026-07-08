@@ -1,27 +1,31 @@
 import { create } from "zustand";
 
+// Fallback list used when the server-side Anthropic model list is unavailable.
+// Ordered by release date (newest first) so the first entry is the default.
 export const AI_MODELS = [
+  { id: "claude-sonnet-5", label: "Claude Sonnet 5" },
+  { id: "claude-fable-5", label: "Claude Fable 5" },
+  { id: "claude-opus-4-8", label: "Claude Opus 4.8" },
+  { id: "claude-opus-4-7", label: "Claude Opus 4.7" },
   { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
   { id: "claude-opus-4-6", label: "Claude Opus 4.6" },
 ] as const;
-
-export type AIModelId = (typeof AI_MODELS)[number]["id"];
 
 const STORAGE_KEY = "eulard-ai-settings";
 
 export interface AISettings {
   maxSteps: number;
-  model: AIModelId;
+  model: string;
 }
 
 interface AISettingsStore extends AISettings {
   setMaxSteps: (maxSteps: number) => void;
-  setModel: (model: AIModelId) => void;
+  setModel: (model: string) => void;
 }
 
 function loadSettings(): AISettings {
   if (typeof window === "undefined") {
-    return { maxSteps: 15, model: "claude-sonnet-4-6" };
+    return { maxSteps: 15, model: AI_MODELS[0].id };
   }
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -29,15 +33,15 @@ function loadSettings(): AISettings {
       const parsed = JSON.parse(stored);
       return {
         maxSteps: typeof parsed.maxSteps === "number" ? parsed.maxSteps : 15,
-        model: AI_MODELS.some((m) => m.id === parsed.model)
+        model: typeof parsed.model === "string" && parsed.model.length > 0
           ? parsed.model
-          : "claude-sonnet-4-6",
+          : AI_MODELS[0].id,
       };
     }
   } catch {
     // ignore
   }
-  return { maxSteps: 15, model: "claude-sonnet-4-6" };
+  return { maxSteps: 15, model: AI_MODELS[0].id };
 }
 
 function persistSettings(settings: AISettings) {
@@ -57,7 +61,7 @@ export const useAISettingsStore = create<AISettingsStore>((set, get) => ({
     persistSettings({ ...get(), maxSteps: clamped });
   },
 
-  setModel: (model: AIModelId) => {
+  setModel: (model: string) => {
     set({ model });
     persistSettings({ ...get(), model });
   },
