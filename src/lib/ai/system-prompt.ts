@@ -81,6 +81,20 @@ When a user describes a process (e.g., "supply chain", "onboarding flow", "CI/CD
 - **exportDiagram**: Export as PNG, SVG, or mermaid code file.
 ${clientContextSection}
 
+## Diagram Annotations
+
+The diagram code uses Mermaid plus \`%%@\` directive comments for visual metadata:
+
+  %%@ node <id> pos=X,Y size=WxH fill=#hex stroke=#hex shape=<name>
+  %%@ edge <source>-><target> color=#hex width=N
+  %%@ defaults node|edge ...
+
+When using addNodes / updateNodes you can pass position/size/style directly — the
+client will emit the corresponding directives. You should NOT regenerate annotations
+manually unless the user asked to relayout the entire diagram.
+
+New shape types: hexagon, parallelogram, trapezoid (in addition to the prior six).
+
 ## Instructions
 - IMPORTANT: Execute ALL tool calls needed to fulfill the user's request in a SINGLE response. Do NOT stop after just updating metadata — build the complete diagram immediately.
 - **Plan first**: Before building, mentally outline ALL the major steps/components. Ensure the diagram is comprehensive and covers the full scope.

@@ -7,6 +7,7 @@ import type {
   MermaidNodeType,
   MermaidEdgeType,
 } from "@/types/graph";
+import { parseAnnotations } from "./annotations";
 
 /**
  * Parse mermaid flowchart code into a graph model.
@@ -14,42 +15,38 @@ import type {
  * Returns null if the code is not a flowchart.
  */
 export function mermaidToGraph(code: string): FlowchartGraph | null {
-  const lines = code.split("\n").map((l) => l.trim()).filter(Boolean);
+  const rawLines = code.split(/\r?\n/);
+  const lines = rawLines.map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return null;
 
-  // Parse direction from first line
   const dirMatch = lines[0].match(
     /^(?:flowchart|graph)\s+(TB|BT|LR|RL|TD)\s*$/i
   );
   if (!dirMatch) return null;
 
   const rawDir = dirMatch[1].toUpperCase();
-  const direction: FlowchartDirection = rawDir === "TD" ? "TB" : rawDir as FlowchartDirection;
+  const direction: FlowchartDirection = rawDir === "TD" ? "TB" : (rawDir as FlowchartDirection);
 
   const nodes = new Map<string, GraphNode>();
   const edges: GraphEdge[] = [];
   const subgraphs: GraphSubgraph[] = [];
+  const passthrough: string[] = [];
+  let globalNodeStyle: FlowchartGraph["globalNodeStyle"];
+  let globalEdgeStyle: FlowchartGraph["globalEdgeStyle"];
   let edgeCounter = 0;
 
-  // Stack to track nested subgraph parsing
-  const subgraphStack: { id: string; label: string; nodeIds: string[]; parentId?: string }[] = [];
+  const subgraphStack: {
+    id: string;
+    label: string;
+    nodeIds: string[];
+    parentId?: string;
+  }[] = [];
 
-  // Process remaining lines
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i];
+  for (let i = 1; i < rawLines.length; i++) {
+    const rawLine = rawLines[i];
+    const line = rawLine.trim();
+    if (!line) continue;
 
-    // Skip comments, classDef, style, click directives
-    if (
-      line.startsWith("%%") ||
-      line.startsWith("classDef") ||
-      line.startsWith("style") ||
-      line.startsWith("click") ||
-      line.startsWith("linkStyle")
-    ) {
-      continue;
-    }
-
-    // Parse subgraph opening: subgraph ID[Label] or subgraph ID
     const subgraphMatch = line.match(/^subgraph\s+(\S+?)(?:\s*\[(.+?)\])?\s*$/);
     if (subgraphMatch) {
       const sgId = subgraphMatch[1];
@@ -61,7 +58,6 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
       continue;
     }
 
-    // Parse subgraph closing
     if (line === "end") {
       const completed = subgraphStack.pop();
       if (completed) {
@@ -75,10 +71,8 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
       continue;
     }
 
-    // Try to parse as edge: A --> B, A -->|label| B, A -- label --> B, etc.
     const edgeResult = parseEdgeLine(line);
     if (edgeResult) {
-      // Ensure source and target nodes exist
       ensureNode(nodes, edgeResult.source);
       ensureNode(nodes, edgeResult.target);
       edges.push({
@@ -88,7 +82,6 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
         label: edgeResult.label,
         type: edgeResult.edgeType,
       });
-      // Track nodes inside the current subgraph
       if (subgraphStack.length > 0) {
         const current = subgraphStack[subgraphStack.length - 1];
         if (!current.nodeIds.includes(edgeResult.source.id)) {
@@ -101,7 +94,6 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
       continue;
     }
 
-    // Try to parse as standalone node definition: A[Label], B{Decision}, etc.
     const nodeResult = parseNodeDef(line);
     if (nodeResult) {
       if (!nodes.has(nodeResult.id)) {
@@ -110,15 +102,49 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
           position: { x: 0, y: 0 },
         });
       }
-      // Track node inside the current subgraph
       if (subgraphStack.length > 0) {
         const current = subgraphStack[subgraphStack.length - 1];
         if (!current.nodeIds.includes(nodeResult.id)) {
           current.nodeIds.push(nodeResult.id);
         }
       }
+      continue;
     }
+
+    if (line.startsWith("%%@")) {
+      const annMatch = line.match(/^\s*%%@\s+(\S+)/);
+      const kind = annMatch?.[1]?.toLowerCase();
+      if (kind === "node" || kind === "edge") {
+        continue;
+      }
+      if (kind === "defaults") {
+        const parsed = parseAnnotations(rawLine).annotations[0];
+        if (parsed?.kind === "defaults") {
+          if (parsed.scope === "node") globalNodeStyle = parsed.style;
+          else globalEdgeStyle = parsed.style;
+        }
+      }
+      passthrough.push(rawLine);
+      continue;
+    }
+
+    if (
+      line.startsWith("%%") ||
+      line.startsWith("classDef") ||
+      line.startsWith("class ") ||
+      line.startsWith("style ") ||
+      line.startsWith("click ") ||
+      line.startsWith("linkStyle")
+    ) {
+      passthrough.push(rawLine);
+      continue;
+    }
+
+    passthrough.push(rawLine);
   }
+
+  const { annotations } = parseAnnotations(code);
+  applyAnnotations(nodes, edges, annotations);
 
   return {
     diagramType: "flowchart",
@@ -126,7 +152,49 @@ export function mermaidToGraph(code: string): FlowchartGraph | null {
     nodes: Array.from(nodes.values()),
     edges,
     subgraphs,
+    passthrough,
+    globalNodeStyle,
+    globalEdgeStyle,
   };
+}
+
+function applyAnnotations(
+  nodes: Map<string, GraphNode>,
+  edges: GraphEdge[],
+  annotations: ReturnType<typeof parseAnnotations>["annotations"]
+) {
+  for (const ann of annotations) {
+    if (ann.kind === "node") {
+      const node = nodes.get(ann.id);
+      if (!node) continue;
+      if (ann.position) node.position = ann.position;
+      if (ann.size) node.size = ann.size;
+      if (ann.style) node.style = { ...node.style, ...ann.style };
+      if (ann.shape && isMermaidNodeType(ann.shape)) node.type = ann.shape;
+    } else if (ann.kind === "edge") {
+      const edge = edges.find(
+        (e) => e.source === ann.source && e.target === ann.target
+      );
+      if (!edge) continue;
+      if (ann.style) edge.style = { ...edge.style, ...ann.style };
+    }
+  }
+}
+
+const VALID_SHAPES: ReadonlySet<string> = new Set([
+  "default",
+  "decision",
+  "stadium",
+  "subroutine",
+  "cylinder",
+  "circle",
+  "hexagon",
+  "parallelogram",
+  "trapezoid",
+]);
+
+function isMermaidNodeType(value: string): value is MermaidNodeType {
+  return VALID_SHAPES.has(value);
 }
 
 interface ParsedNodeDef {
@@ -146,7 +214,6 @@ function ensureNode(nodes: Map<string, GraphNode>, def: ParsedNodeDef) {
   if (!nodes.has(def.id)) {
     nodes.set(def.id, { ...def, position: { x: 0, y: 0 } });
   } else if (def.label !== def.id) {
-    // Update label if the node now has a richer definition
     const existing = nodes.get(def.id)!;
     if (existing.label === existing.id) {
       existing.label = def.label;
@@ -155,25 +222,22 @@ function ensureNode(nodes: Map<string, GraphNode>, def: ParsedNodeDef) {
   }
 }
 
-/**
- * Parse a node definition like:
- *   A[Label]  A{Label}  A(Label)  A((Label))  A[[Label]]  A[(Label)]
- */
 function parseNodeDef(text: string): ParsedNodeDef | null {
   text = text.trim();
 
-  // Match node with shape: ID + shape delimiter + label + closing delimiter
   const patterns: Array<{
     regex: RegExp;
     type: MermaidNodeType;
   }> = [
-    { regex: /^(\w+)\{\{(.+?)\}\}/, type: "default" }, // hexagon {{}}
-    { regex: /^(\w+)\[\[(.+?)\]\]/, type: "subroutine" }, // subroutine [[]]
-    { regex: /^(\w+)\[\((.+?)\)\]/, type: "cylinder" }, // cylinder [()]
-    { regex: /^(\w+)\(\((.+?)\)\)/, type: "circle" }, // circle (())
-    { regex: /^(\w+)\((.+?)\)/, type: "stadium" }, // stadium ()
-    { regex: /^(\w+)\{(.+?)\}/, type: "decision" }, // diamond/decision {}
-    { regex: /^(\w+)\[(.+?)\]/, type: "default" }, // rectangle []
+    { regex: /^(\w+)\{\{(.+?)\}\}/, type: "hexagon" },
+    { regex: /^(\w+)\[\/(.+?)\/\]/, type: "parallelogram" },
+    { regex: /^(\w+)\[\/(.+?)\\\]/, type: "trapezoid" },
+    { regex: /^(\w+)\[\[(.+?)\]\]/, type: "subroutine" },
+    { regex: /^(\w+)\[\((.+?)\)\]/, type: "cylinder" },
+    { regex: /^(\w+)\(\((.+?)\)\)/, type: "circle" },
+    { regex: /^(\w+)\((.+?)\)/, type: "stadium" },
+    { regex: /^(\w+)\{(.+?)\}/, type: "decision" },
+    { regex: /^(\w+)\[(.+?)\]/, type: "default" },
   ];
 
   for (const { regex, type } of patterns) {
@@ -183,7 +247,6 @@ function parseNodeDef(text: string): ParsedNodeDef | null {
     }
   }
 
-  // Plain node ID with no shape
   const plainMatch = text.match(/^(\w+)$/);
   if (plainMatch) {
     return { id: plainMatch[1], label: plainMatch[1], type: "default" };
@@ -192,19 +255,16 @@ function parseNodeDef(text: string): ParsedNodeDef | null {
   return null;
 }
 
-/**
- * Extract a node definition from the start of a string.
- * Returns the parsed node and the remaining string.
- */
 function extractNode(text: string): { node: ParsedNodeDef; rest: string } | null {
   text = text.trim();
 
-  // Try shaped nodes first
   const patterns: Array<{
     regex: RegExp;
     type: MermaidNodeType;
   }> = [
-    { regex: /^(\w+)\{\{(.+?)\}\}/, type: "default" },
+    { regex: /^(\w+)\{\{(.+?)\}\}/, type: "hexagon" },
+    { regex: /^(\w+)\[\/(.+?)\/\]/, type: "parallelogram" },
+    { regex: /^(\w+)\[\/(.+?)\\\]/, type: "trapezoid" },
     { regex: /^(\w+)\[\[(.+?)\]\]/, type: "subroutine" },
     { regex: /^(\w+)\[\((.+?)\)\]/, type: "cylinder" },
     { regex: /^(\w+)\(\((.+?)\)\)/, type: "circle" },
@@ -223,7 +283,6 @@ function extractNode(text: string): { node: ParsedNodeDef; rest: string } | null
     }
   }
 
-  // Plain ID — grab until arrow characters or whitespace
   const plainMatch = text.match(/^(\w+)/);
   if (plainMatch) {
     return {
@@ -235,34 +294,16 @@ function extractNode(text: string): { node: ParsedNodeDef; rest: string } | null
   return null;
 }
 
-/**
- * Parse an edge line like:
- *   A --> B
- *   A -->|label| B
- *   A -- label --> B
- *   A -.-> B
- *   A ==> B
- *   A --- B
- */
 function parseEdgeLine(line: string): ParsedEdge | null {
-  // Extract source node
   const sourceResult = extractNode(line);
   if (!sourceResult) return null;
 
   let rest = sourceResult.rest;
   if (!rest) return null;
 
-  // Match arrow patterns
-  // Dotted: -.-> or -..->
-  // Thick: ==> or ===>
-  // Normal: --> or ---> or ---
-  // With text: -- text --> or -. text .-> or == text ==>
-  // With pipe text: -->|text| or -.->|text| or ==>|text|
-
   let edgeType: MermaidEdgeType = "arrow";
   let label: string | undefined;
 
-  // Pattern: -- text --> (text between dashes and arrow)
   const textArrowMatch = rest.match(/^--\s+(.+?)\s+-->/);
   if (textArrowMatch) {
     label = textArrowMatch[1];
@@ -280,7 +321,6 @@ function parseEdgeLine(line: string): ParsedEdge | null {
         label = thickTextMatch[1];
         rest = rest.slice(thickTextMatch[0].length).trim();
       } else {
-        // Arrow without inline text
         const arrowMatch = rest.match(/^(-\.+->|=+>|-+>|-+)/);
         if (!arrowMatch) return null;
 
@@ -291,7 +331,6 @@ function parseEdgeLine(line: string): ParsedEdge | null {
 
         rest = rest.slice(arrowMatch[0].length).trim();
 
-        // Check for pipe label: |text|
         const pipeMatch = rest.match(/^\|(.+?)\|\s*/);
         if (pipeMatch) {
           label = pipeMatch[1];
@@ -301,7 +340,6 @@ function parseEdgeLine(line: string): ParsedEdge | null {
     }
   }
 
-  // Extract target node
   const targetResult = extractNode(rest);
   if (!targetResult) return null;
 

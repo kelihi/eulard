@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
+import { mermaidToGraph } from "@/lib/parser/mermaid-to-graph";
+import { stylesFromCode } from "@/lib/parser/annotations";
 import type {
-  DiagramStyles,
   NodeStyleOverride,
   EdgeStyleOverride,
 } from "@/types/graph";
@@ -339,141 +340,117 @@ function ObjectStyleSection({
 interface StylePanelProps {
   selectedNodeId?: string | null;
   selectedEdgeId?: string | null;
-  nodeLabels?: Record<string, string>;
-  edgeLabels?: Record<string, string>;
 }
 
 export function StylePanel({
   selectedNodeId,
   selectedEdgeId,
-  nodeLabels = {},
-  edgeLabels = {},
 }: StylePanelProps) {
-  const getStyleOverrides = useDiagramStore((s) => s.getStyleOverrides);
-  const setStyleOverrides = useDiagramStore((s) => s.setStyleOverrides);
-  const styleOverridesJson = useDiagramStore(
-    (s) => s.diagram?.styleOverrides ?? null
-  );
+  const code = useDiagramStore((s) => s.diagram?.code ?? "");
+  const setGlobalNodeStyle = useDiagramStore((s) => s.setGlobalNodeStyle);
+  const setGlobalEdgeStyle = useDiagramStore((s) => s.setGlobalEdgeStyle);
+  const setNodeStyle = useDiagramStore((s) => s.setNodeStyle);
+  const setEdgeStyle = useDiagramStore((s) => s.setEdgeStyle);
 
-  const stylesRef = useRef<DiagramStyles>({});
+  // Derive the displayed DiagramStyles from the current code.
+  // Re-runs whenever `code` changes, so the panel stays in sync with edits
+  // made elsewhere (canvas color picker, AI tools, manual code edits).
+  const diagramGraph = useMemo(() => mermaidToGraph(code), [code]);
+  const styles = useMemo(() => stylesFromCode(code), [code]);
+  const graphLabels = useMemo(() => {
+    return {
+      nodeLabels: Object.fromEntries(
+        diagramGraph?.nodes.map((node) => [node.id, node.label]) ?? []
+      ) as Record<string, string>,
+      edgeLabels: Object.fromEntries(
+        diagramGraph?.edges.map((edge) => [
+          `${edge.source}->${edge.target}`,
+          edge.label ?? `${edge.source} → ${edge.target}`,
+        ]) ?? []
+      ) as Record<string, string>,
+    };
+  }, [diagramGraph]);
+  const selectedEdgeKey = useMemo(() => {
+    if (!selectedEdgeId || !diagramGraph) return null;
+    const edge = diagramGraph.edges.find((e) => e.id === selectedEdgeId);
+    return edge ? `${edge.source}->${edge.target}` : null;
+  }, [diagramGraph, selectedEdgeId]);
+  const globalNode = useMemo(() => styles.globalNode ?? {}, [styles.globalNode]);
+  const globalEdge = useMemo(() => styles.globalEdge ?? {}, [styles.globalEdge]);
+  const nodeOverrides = useMemo(() => styles.nodes ?? {}, [styles.nodes]);
+  const edgeOverrides = useMemo(() => styles.edges ?? {}, [styles.edges]);
 
-  // Parse styles from store
-  useEffect(() => {
-    if (styleOverridesJson) {
-      try {
-        stylesRef.current = JSON.parse(styleOverridesJson) as DiagramStyles;
-      } catch {
-        stylesRef.current = {};
-      }
-    } else {
-      stylesRef.current = {};
-    }
-  }, [styleOverridesJson]);
-
-  const getStyles = useCallback((): DiagramStyles => {
-    return stylesRef.current;
-  }, []);
-
-  const updateStyles = useCallback(
-    (updater: (prev: DiagramStyles) => DiagramStyles) => {
-      const current = getStyles();
-      const updated = updater(current);
-      stylesRef.current = updated;
-      setStyleOverrides(updated);
-    },
-    [getStyles, setStyleOverrides]
-  );
-
-  // Global node style handlers
   const updateGlobalNode = useCallback(
     (patch: Partial<NodeStyleOverride>) => {
-      updateStyles((prev) => ({
-        ...prev,
-        globalNode: { ...prev.globalNode, ...patch },
-      }));
+      setGlobalNodeStyle({ ...globalNode, ...patch });
     },
-    [updateStyles]
+    [globalNode, setGlobalNodeStyle]
   );
 
-  // Global edge style handlers
   const updateGlobalEdge = useCallback(
     (patch: Partial<EdgeStyleOverride>) => {
-      updateStyles((prev) => ({
-        ...prev,
-        globalEdge: { ...prev.globalEdge, ...patch },
-      }));
+      setGlobalEdgeStyle({ ...globalEdge, ...patch });
     },
-    [updateStyles]
+    [globalEdge, setGlobalEdgeStyle]
   );
 
-  // Per-object handlers
   const updateNodeStyle = useCallback(
     (id: string, style: NodeStyleOverride) => {
-      updateStyles((prev) => ({
-        ...prev,
-        nodes: { ...prev.nodes, [id]: style },
-      }));
+      setNodeStyle(id, style);
     },
-    [updateStyles]
+    [setNodeStyle]
   );
 
   const updateEdgeStyle = useCallback(
     (id: string, style: EdgeStyleOverride) => {
-      updateStyles((prev) => ({
-        ...prev,
-        edges: { ...prev.edges, [id]: style },
-      }));
+      setEdgeStyle(id, style);
     },
-    [updateStyles]
+    [setEdgeStyle]
   );
 
   const removeNodeOverride = useCallback(
     (id: string) => {
-      updateStyles((prev) => {
-        const nodes = { ...prev.nodes };
-        delete nodes[id];
-        return { ...prev, nodes };
-      });
+      setNodeStyle(id, {});
     },
-    [updateStyles]
+    [setNodeStyle]
   );
 
   const removeEdgeOverride = useCallback(
     (id: string) => {
-      updateStyles((prev) => {
-        const edges = { ...prev.edges };
-        delete edges[id];
-        return { ...prev, edges };
-      });
+      setEdgeStyle(id, {});
     },
-    [updateStyles]
+    [setEdgeStyle]
   );
 
   const addSelectedNodeOverride = useCallback(() => {
     if (!selectedNodeId) return;
-    updateStyles((prev) => ({
-      ...prev,
-      nodes: { ...prev.nodes, [selectedNodeId]: prev.nodes?.[selectedNodeId] ?? {} },
-    }));
-  }, [selectedNodeId, updateStyles]);
+    setNodeStyle(selectedNodeId, {
+      ...globalNode,
+      ...(nodeOverrides[selectedNodeId] ?? {}),
+    });
+  }, [selectedNodeId, globalNode, nodeOverrides, setNodeStyle]);
 
   const addSelectedEdgeOverride = useCallback(() => {
-    if (!selectedEdgeId) return;
-    updateStyles((prev) => ({
-      ...prev,
-      edges: { ...prev.edges, [selectedEdgeId]: prev.edges?.[selectedEdgeId] ?? {} },
-    }));
-  }, [selectedEdgeId, updateStyles]);
+    if (!selectedEdgeKey) return;
+    setEdgeStyle(selectedEdgeKey, {
+      ...globalEdge,
+      ...(edgeOverrides[selectedEdgeKey] ?? {}),
+    });
+  }, [selectedEdgeKey, globalEdge, edgeOverrides, setEdgeStyle]);
 
   const resetAll = useCallback(() => {
-    setStyleOverrides({});
-  }, [setStyleOverrides]);
-
-  const styles = getStyleOverrides();
-  const globalNode = styles.globalNode ?? {};
-  const globalEdge = styles.globalEdge ?? {};
-  const nodeOverrides = styles.nodes ?? {};
-  const edgeOverrides = styles.edges ?? {};
+    setGlobalNodeStyle({});
+    setGlobalEdgeStyle({});
+    for (const id of Object.keys(nodeOverrides)) setNodeStyle(id, {});
+    for (const key of Object.keys(edgeOverrides)) setEdgeStyle(key, {});
+  }, [
+    setGlobalNodeStyle,
+    setGlobalEdgeStyle,
+    setNodeStyle,
+    setEdgeStyle,
+    nodeOverrides,
+    edgeOverrides,
+  ]);
 
   const hasNodeOverrides = Object.keys(nodeOverrides).length > 0;
   const hasEdgeOverrides = Object.keys(edgeOverrides).length > 0;
@@ -601,15 +578,15 @@ export function StylePanel({
                 onClick={addSelectedNodeOverride}
                 className="text-xs px-2 py-0.5 rounded border border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
               >
-                + Style &quot;{nodeLabels[selectedNodeId] ?? selectedNodeId}&quot;
+                + Style &quot;{graphLabels.nodeLabels[selectedNodeId] ?? selectedNodeId}&quot;
               </button>
             )}
-            {selectedEdgeId && !edgeOverrides[selectedEdgeId] && (
+            {selectedEdgeKey && !edgeOverrides[selectedEdgeKey] && (
               <button
                 onClick={addSelectedEdgeOverride}
                 className="text-xs px-2 py-0.5 rounded border border-[var(--primary)] text-[var(--primary)] hover:bg-[var(--primary)]/10 transition-colors"
               >
-                + Style edge &quot;{edgeLabels[selectedEdgeId] ?? selectedEdgeId}&quot;
+                + Style edge &quot;{graphLabels.edgeLabels[selectedEdgeKey] ?? selectedEdgeKey}&quot;
               </button>
             )}
             {!selectedNodeId && !selectedEdgeId && !hasNodeOverrides && !hasEdgeOverrides && (
@@ -625,7 +602,7 @@ export function StylePanel({
               key={`node-${id}`}
               title="Node"
               objectId={id}
-              objectLabel={nodeLabels[id] ?? id}
+              objectLabel={graphLabels.nodeLabels[id] ?? id}
               nodeStyle={style}
               isEdge={false}
               onUpdateNodeStyle={updateNodeStyle}
@@ -640,7 +617,7 @@ export function StylePanel({
               key={`edge-${id}`}
               title="Edge"
               objectId={id}
-              objectLabel={edgeLabels[id] ?? id}
+              objectLabel={graphLabels.edgeLabels[id] ?? id}
               edgeStyle={style}
               isEdge={true}
               onUpdateNodeStyle={updateNodeStyle}

@@ -3,18 +3,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
-  BackgroundVariant,
   Controls,
   MiniMap,
   applyNodeChanges,
   applyEdgeChanges,
-  SelectionMode,
+  useReactFlow,
   type Node,
   type Edge,
   type NodeChange,
   type EdgeChange,
-  type OnSelectionChangeParams,
+  type Connection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useDiagramStore } from "@/stores/diagram-store";
@@ -26,7 +26,8 @@ import { updateGraphPositions } from "@/lib/parser/reactflow-to-graph";
 import { customNodeTypes } from "./custom-nodes";
 import { customEdgeTypes } from "./custom-edges";
 import { NodeContextMenu } from "./node-context-menu";
-import type { FlowchartGraph } from "@/types/graph";
+import { CanvasToolbar } from "./canvas-toolbar";
+import type { FlowchartGraph, GraphNode } from "@/types/graph";
 import type { MermaidNodeType } from "@/types/graph";
 
 interface ContextMenuState {
@@ -36,46 +37,29 @@ interface ContextMenuState {
   y: number;
 }
 
-/**
- * Build a position map from React Flow nodes, converting child-relative
- * positions back to absolute canvas coordinates.  Subgraph group nodes
- * are excluded — their bounds are recomputed from children on each render.
- */
-function buildPositionMap(nodes: Node[]): Record<string, { x: number; y: number }> {
-  const map: Record<string, { x: number; y: number }> = {};
-  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-
-  function toAbsolute(n: Node): { x: number; y: number } {
-    let x = n.position.x;
-    let y = n.position.y;
-    let current = n;
-    while (current.parentId) {
-      const parent = nodeMap.get(current.parentId);
-      if (!parent) break;
-      x += parent.position.x;
-      y += parent.position.y;
-      current = parent;
-    }
-    return { x, y };
+function generateNodeId(existing: GraphNode[]): string {
+  const used = new Set(existing.map((n) => n.id));
+  for (let i = 1; i < 1000; i++) {
+    const id = `N${i}`;
+    if (!used.has(id)) return id;
   }
-
-  for (const n of nodes) {
-    // Skip subgraph group nodes — they are derived from child positions
-    if ((n.data as { isSubgraph?: boolean })?.isSubgraph) continue;
-    map[n.id] = toAbsolute(n);
-  }
-  return map;
+  return `N${Date.now()}`;
 }
 
 export function VisualCanvas() {
+  return (
+    <ReactFlowProvider>
+      <VisualCanvasInner />
+    </ReactFlowProvider>
+  );
+}
+
+function VisualCanvasInner() {
   const code = useDiagramStore((s) => s.diagram?.code ?? "");
-  const positions = useDiagramStore((s) => s.diagram?.positions ?? null);
   const setCode = useDiagramStore((s) => s.setCode);
-  const setPositions = useDiagramStore((s) => s.setPositions);
   const syncState = useDiagramStore((s) => s.syncState);
   const setSelectedNodeIds = useDiagramStore((s) => s.setSelectedNodeIds);
   const setSelectedEdgeIds = useDiagramStore((s) => s.setSelectedEdgeIds);
-  const clearSelection = useDiagramStore((s) => s.clearSelection);
 
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -85,6 +69,12 @@ export function VisualCanvas() {
   const codeFromCanvasRef = useRef<string | null>(null);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [selection, setSelection] = useState<{
+    nodeId: string | null;
+    edgeId: string | null;
+  }>({ nodeId: null, edgeId: null });
+
+  const { screenToFlowPosition } = useReactFlow();
 
   const isLocked = syncState === "ai-streaming";
 
@@ -188,16 +178,6 @@ export function VisualCanvas() {
       const graph = mermaidToGraph(code);
       if (!graph) return;
 
-      // Check if stored positions exist in the database
-      let savedPositions: Record<string, { x: number; y: number }> | null = null;
-      if (positions) {
-        try {
-          savedPositions = JSON.parse(positions) as Record<string, { x: number; y: number }>;
-        } catch {
-          // ignore invalid JSON
-        }
-      }
-
       // Apply auto-layout if nodes have no positions (all at 0,0)
       const allAtOrigin = graph.nodes.every(
         (n) => n.position.x === 0 && n.position.y === 0
@@ -205,16 +185,7 @@ export function VisualCanvas() {
 
       let layoutGraph = allAtOrigin ? autoLayout(graph) : graph;
 
-      // If saved positions exist, apply them to matching nodes
-      if (savedPositions) {
-        layoutGraph = {
-          ...layoutGraph,
-          nodes: layoutGraph.nodes.map((n) => {
-            const saved = savedPositions[n.id];
-            return saved ? { ...n, position: { x: saved.x, y: saved.y } } : n;
-          }),
-        };
-      } else if (graphRef.current && !allAtOrigin) {
+      if (graphRef.current && !allAtOrigin) {
         // Preserve previous in-memory positions for existing nodes
         const prevPositions = new Map(
           graphRef.current.nodes.map((n) => [n.id, n.position])
@@ -235,7 +206,7 @@ export function VisualCanvas() {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [code, positions, onRenameNode, isLocked, injectEdgeCallbacks]);
+  }, [code, onRenameNode, isLocked, injectEdgeCallbacks]);
 
   // Re-inject edge callbacks when handleRenameEdge changes
   useEffect(() => {
@@ -253,6 +224,7 @@ export function VisualCanvas() {
       const hasDragEnd = changes.some(
         (c) => c.type === "position" && c.dragging === false
       );
+      const hasResize = changes.some((c) => c.type === "dimensions");
 
       if (hasDragStart) isDraggingRef.current = true;
 
@@ -261,25 +233,20 @@ export function VisualCanvas() {
 
         if (hasDragEnd) {
           isDraggingRef.current = false;
+        }
 
-          // Sync positions back to code
-          if (graphRef.current) {
-            const updatedGraph = updateGraphPositions(
-              graphRef.current,
-              updatedNodes
-            );
-            syncGraphToCode(updatedGraph);
-
-            // Persist positions to the database
-            const positionMap = buildPositionMap(updatedNodes);
-            setPositions(JSON.stringify(positionMap));
-          }
+        if ((hasDragEnd || hasResize) && graphRef.current) {
+          const updatedGraph = updateGraphPositions(
+            graphRef.current,
+            updatedNodes
+          );
+          syncGraphToCode(updatedGraph);
         }
 
         return updatedNodes;
       });
     },
-    [isLocked, syncGraphToCode, setPositions]
+    [isLocked, syncGraphToCode]
   );
 
   const onEdgesChange = useCallback(
@@ -290,14 +257,40 @@ export function VisualCanvas() {
     [isLocked]
   );
 
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      if (isLocked || !graphRef.current) return;
+      if (!connection.source || !connection.target) return;
+      if (connection.source === connection.target) return;
+
+      const exists = graphRef.current.edges.some(
+        (e) => e.source === connection.source && e.target === connection.target
+      );
+      if (exists) return;
+
+      const updated: FlowchartGraph = {
+        ...graphRef.current,
+        edges: [
+          ...graphRef.current.edges,
+          {
+            id: `e_user_${Date.now()}`,
+            source: connection.source,
+            target: connection.target,
+            type: "arrow",
+          },
+        ],
+      };
+      syncGraphToCode(updated);
+    },
+    [isLocked, syncGraphToCode]
+  );
+
   // Context menu handlers
   const onNodeContextMenu = useCallback(
     (event: React.MouseEvent, node: Node) => {
       if (isLocked) return;
-      // Skip context menu for subgraph group nodes
-      const nodeData = node.data as { label?: string; isSubgraph?: boolean } | undefined;
-      if (nodeData?.isSubgraph) return;
       event.preventDefault();
+      const nodeData = node.data as { label?: string } | undefined;
       setContextMenu({
         nodeId: node.id,
         nodeLabel: (nodeData?.label as string) ?? node.id,
@@ -354,23 +347,6 @@ export function VisualCanvas() {
         edges: graphRef.current.edges.filter(
           (e) => e.source !== nodeId && e.target !== nodeId
         ),
-        // Remove deleted node from any subgraph membership and clear orphaned parentSubgraph refs
-        subgraphs: (() => {
-          const updated = graphRef.current!.subgraphs.map((sg) => ({
-            ...sg,
-            nodeIds: sg.nodeIds.filter((nid) => nid !== nodeId),
-          }));
-          const removedSgIds = new Set(
-            updated.filter((sg) => sg.nodeIds.length === 0).map((sg) => sg.id)
-          );
-          return updated
-            .filter((sg) => sg.nodeIds.length > 0)
-            .map((sg) =>
-              sg.parentSubgraph && removedSgIds.has(sg.parentSubgraph)
-                ? { ...sg, parentSubgraph: undefined }
-                : sg
-            );
-        })(),
       };
       syncGraphToCode(updatedGraph);
       // Update React Flow state immediately
@@ -378,8 +354,11 @@ export function VisualCanvas() {
       setEdges((prev) =>
         prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
       );
+      setSelection({ nodeId: null, edgeId: null });
+      setSelectedNodeIds([]);
+      setSelectedEdgeIds([]);
     },
-    [isLocked, syncGraphToCode]
+    [isLocked, syncGraphToCode, setSelectedEdgeIds, setSelectedNodeIds]
   );
 
   const handleNodeChangeShape = useCallback(
@@ -404,23 +383,206 @@ export function VisualCanvas() {
     [isLocked, syncGraphToCode]
   );
 
-  // Sync React Flow selection to store
-  const onSelectionChange = useCallback(
-    ({ nodes: selectedNodes, edges: selectedEdges }: OnSelectionChangeParams) => {
-      setSelectedNodeIds(selectedNodes.map((n) => n.id));
-      setSelectedEdgeIds(selectedEdges.map((e) => e.id));
+  const handleNodeSetColor = useCallback(
+    (nodeId: string, fill: string | null, stroke: string | null) => {
+      if (!graphRef.current || isLocked) return;
+      const updated: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: graphRef.current.nodes.map((n) => {
+          if (n.id !== nodeId) return n;
+          const style = { ...(n.style ?? {}) };
+          if (fill === null) delete style.backgroundColor;
+          else style.backgroundColor = fill;
+          if (stroke === null) delete style.borderColor;
+          else style.borderColor = stroke;
+          return Object.keys(style).length > 0
+            ? { ...n, style }
+            : { ...n, style: undefined };
+        }),
+      };
+      syncGraphToCode(updated);
     },
-    [setSelectedNodeIds, setSelectedEdgeIds]
+    [isLocked, syncGraphToCode]
   );
 
-  // Close context menu on pane click and clear selection
+  const handleDuplicate = useCallback(
+    (id: string) => {
+      if (!graphRef.current || isLocked) return;
+      const original = graphRef.current.nodes.find((n) => n.id === id);
+      if (!original) return;
+      const newId = generateNodeId(graphRef.current.nodes);
+      const updated: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: [
+          ...graphRef.current.nodes,
+          {
+            ...original,
+            id: newId,
+            label: newId,
+            position: {
+              x: original.position.x + 40,
+              y: original.position.y + 40,
+            },
+          },
+        ],
+      };
+      syncGraphToCode(updated);
+    },
+    [isLocked, syncGraphToCode]
+  );
+
+  const handleEdgeDelete = useCallback(
+    (edgeId: string) => {
+      if (!graphRef.current || isLocked) return;
+      const updated: FlowchartGraph = {
+        ...graphRef.current,
+        edges: graphRef.current.edges.filter((e) => e.id !== edgeId),
+      };
+      syncGraphToCode(updated);
+      setEdges((prev) => prev.filter((e) => e.id !== edgeId));
+      setSelection((prev) =>
+        prev.edgeId === edgeId ? { ...prev, edgeId: null } : prev
+      );
+      setSelectedEdgeIds([]);
+    },
+    [isLocked, syncGraphToCode, setSelectedEdgeIds]
+  );
+
+  const onSelectionChange = useCallback(
+    (sel: { nodes: Node[]; edges: Edge[] }) => {
+      const nextSelection = {
+        nodeId: sel.nodes[0]?.id ?? null,
+        edgeId: sel.edges[0]?.id ?? null,
+      };
+      setSelection(nextSelection);
+      setSelectedNodeIds(sel.nodes.map((n) => n.id));
+      setSelectedEdgeIds(sel.edges.map((e) => e.id));
+    },
+    [setSelectedEdgeIds, setSelectedNodeIds]
+  );
+
+  // Close context menu on pane click
   const onPaneClick = useCallback(() => {
     setContextMenu(null);
-    clearSelection();
-  }, [clearSelection]);
+  }, []);
+
+  // Add a default node at the current canvas viewport center
+  const addNodeAtCenter = useCallback(() => {
+    if (!graphRef.current || isLocked) return;
+    const center = screenToFlowPosition({
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    });
+    const id = generateNodeId(graphRef.current.nodes);
+    const updated: FlowchartGraph = {
+      ...graphRef.current,
+      nodes: [
+        ...graphRef.current.nodes,
+        {
+          id,
+          label: id,
+          type: "default",
+          position: { x: Math.round(center.x), y: Math.round(center.y) },
+        },
+      ],
+    };
+    syncGraphToCode(updated);
+  }, [isLocked, screenToFlowPosition, syncGraphToCode]);
+
+  // Keyboard shortcuts: Delete/Backspace, Cmd/Ctrl+D, N
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (isLocked) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const isEditable =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        target?.isContentEditable === true;
+      if (isEditable) return;
+
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (mod && (e.key === "d" || e.key === "D")) {
+        if (!selection.nodeId) return;
+        e.preventDefault();
+        handleDuplicate(selection.nodeId);
+        return;
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selection.nodeId) {
+          e.preventDefault();
+          handleNodeDelete(selection.nodeId);
+        } else if (selection.edgeId) {
+          e.preventDefault();
+          handleEdgeDelete(selection.edgeId);
+        }
+        return;
+      }
+
+      if (!mod && (e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        addNodeAtCenter();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [
+    isLocked,
+    selection.nodeId,
+    selection.edgeId,
+    handleDuplicate,
+    handleNodeDelete,
+    handleEdgeDelete,
+    addNodeAtCenter,
+  ]);
+
+  // Double-click empty pane to add a new node
+  const onPaneDoubleClick = useCallback(
+    (event: React.MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.classList.contains("react-flow__pane")) return;
+      if (isLocked || !graphRef.current) return;
+      const pos = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const newId = generateNodeId(graphRef.current.nodes);
+      const newNode: GraphNode = {
+        id: newId,
+        label: newId,
+        type: "default",
+        position: { x: Math.round(pos.x), y: Math.round(pos.y) },
+      };
+      const updatedGraph: FlowchartGraph = {
+        ...graphRef.current,
+        nodes: [...graphRef.current.nodes, newNode],
+      };
+      syncGraphToCode(updatedGraph);
+    },
+    [isLocked, screenToFlowPosition, syncGraphToCode]
+  );
 
   return (
     <div className="h-full w-full relative">
+      <CanvasToolbar
+        onAddNode={(shape) => {
+          if (!graphRef.current) return;
+          const id = generateNodeId(graphRef.current.nodes);
+          const center = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+          const updated: FlowchartGraph = {
+            ...graphRef.current,
+            nodes: [
+              ...graphRef.current.nodes,
+              { id, label: id, type: shape, position: { x: Math.round(center.x), y: Math.round(center.y) } },
+            ],
+          };
+          syncGraphToCode(updated);
+        }}
+        selectedNodeId={isLocked ? null : selection.nodeId}
+        selectedEdgeId={isLocked ? null : selection.edgeId}
+        onDeleteNode={handleNodeDelete}
+        onDuplicateNode={handleDuplicate}
+        onDeleteEdge={handleEdgeDelete}
+      />
       {isLocked && (
         <div className="absolute inset-0 z-10 bg-[var(--background)]/50 flex items-center justify-center">
           <span className="text-sm text-[var(--primary)] font-medium animate-pulse">
@@ -433,32 +595,25 @@ export function VisualCanvas() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={onPaneClick}
+        onDoubleClick={onPaneDoubleClick}
         onSelectionChange={onSelectionChange}
         nodeTypes={customNodeTypes}
         edgeTypes={customEdgeTypes}
         fitView
         nodesDraggable={!isLocked}
-        nodesConnectable={false}
+        nodesConnectable={!isLocked}
         elementsSelectable={!isLocked}
-        selectionOnDrag={!isLocked}
-        selectionMode={SelectionMode.Partial}
-        selectionKeyCode={null}
-        multiSelectionKeyCode="Shift"
-        panOnDrag={[1]}
-        panOnScroll
         proOptions={{ hideAttribution: true }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={16} size={1} color="var(--muted-foreground)" style={{ opacity: 0.3 }} />
-        <Controls showInteractive={false} />
+        <Background />
+        <Controls />
         <MiniMap
           nodeStrokeColor="var(--border)"
-          nodeColor="var(--muted)"
-          maskColor="rgba(0,0,0,0.08)"
-          style={{ borderRadius: 8 }}
-          pannable
-          zoomable
+          nodeColor="var(--background)"
+          maskColor="rgba(0,0,0,0.1)"
         />
       </ReactFlow>
       {contextMenu && !isLocked && (
@@ -470,6 +625,7 @@ export function VisualCanvas() {
           onRename={handleNodeRename}
           onDelete={handleNodeDelete}
           onChangeShape={handleNodeChangeShape}
+          onSetColor={handleNodeSetColor}
           onClose={handleContextMenuClose}
         />
       )}

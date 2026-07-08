@@ -1,5 +1,6 @@
+import type { CSSProperties } from "react";
 import type { Node, Edge } from "@xyflow/react";
-import type { FlowchartGraph } from "@/types/graph";
+import type { FlowchartGraph, NodeStyleOverride, EdgeStyleOverride } from "@/types/graph";
 
 /**
  * Split a label on <br/>, <br>, or <br /> tags and return an array of lines.
@@ -22,9 +23,9 @@ export function estimateNodeSize(label: string): { width: number; height: number
 export interface FlowNodeData {
   label: string;
   mermaidType: string;
+  style?: NodeStyleOverride;
   onRenameNode?: (nodeId: string, newLabel: string) => void;
   isLocked?: boolean;
-  isSubgraph?: boolean;
   [key: string]: unknown;
 }
 
@@ -34,6 +35,28 @@ export interface FlowEdgeData {
   mermaidEdgeType: string;
   onRenameEdge?: (edgeId: string, newLabel: string) => void;
   [key: string]: unknown;
+}
+
+function nodeStyleToCss(style?: NodeStyleOverride): CSSProperties {
+  if (!style) return {};
+  const css: CSSProperties = {};
+  if (style.backgroundColor) css.backgroundColor = style.backgroundColor;
+  if (style.borderColor) css.borderColor = style.borderColor;
+  if (style.fontFamily) css.fontFamily = style.fontFamily;
+  if (style.fontSize) css.fontSize = `${style.fontSize}px`;
+  if (style.fontColor) css.color = style.fontColor;
+  return css;
+}
+
+function edgeStyleToCss(style?: EdgeStyleOverride): CSSProperties {
+  if (!style) return {};
+  const css: CSSProperties = {};
+  if (style.lineColor) css.stroke = style.lineColor;
+  if (style.lineThickness) css.strokeWidth = style.lineThickness;
+  if (style.fontFamily) css.fontFamily = style.fontFamily;
+  if (style.fontSize) css.fontSize = `${style.fontSize}px`;
+  if (style.fontColor) css.color = style.fontColor;
+  return css;
 }
 
 /**
@@ -47,137 +70,46 @@ export function graphToReactFlow(
   nodes: Node<FlowNodeData>[];
   edges: Edge[];
 } {
-  // Build a lookup: nodeId -> subgraphId (direct parent)
-  const nodeToSubgraph = new Map<string, string>();
-  for (const sg of graph.subgraphs) {
-    for (const nid of sg.nodeIds) {
-      // Only set if not already assigned (innermost subgraph wins for nested)
-      // We'll re-assign below for nested subgraphs
-      nodeToSubgraph.set(nid, sg.id);
-    }
-  }
-  // For nested subgraphs, child nodes should belong to the most specific (innermost) subgraph.
-  // Since subgraphs are parsed bottom-up (children first), re-iterate to assign to innermost.
-  // Actually, our parser emits children before parents, so the last assignment is the parent.
-  // We need to re-assign: for each node, find the subgraph with the smallest nodeIds set that contains it.
-  if (graph.subgraphs.length > 1) {
-    for (const [nid] of nodeToSubgraph) {
-      let bestSg: string | undefined;
-      let bestSize = Infinity;
-      for (const sg of graph.subgraphs) {
-        if (sg.nodeIds.includes(nid) && sg.nodeIds.length < bestSize) {
-          bestSize = sg.nodeIds.length;
-          bestSg = sg.id;
-        }
-      }
-      if (bestSg) nodeToSubgraph.set(nid, bestSg);
-    }
-  }
+  const nodes: Node<FlowNodeData>[] = graph.nodes.map((n) => {
+    let width: number;
+    let height: number;
 
-  const nodes: Node<FlowNodeData>[] = [];
-
-  // Collect regular node info for subgraph bounds computation
-  const nodeSizeMap = new Map<string, { width: number; height: number }>();
-  const nodePositionMap = new Map<string, { x: number; y: number }>();
-
-  for (const n of graph.nodes) {
-    const base = estimateNodeSize(n.label);
-    let width = base.width;
-    let height = base.height;
-    if (n.type === "decision") {
-      width = Math.max(120, base.width * 1.6);
-      height = Math.max(80, base.height * 1.6);
-    } else if (n.type === "circle") {
-      const diameter = Math.max(64, Math.ceil(Math.sqrt(base.width * base.width + base.height * base.height) * 0.75));
-      width = diameter;
-      height = diameter;
-    }
-    nodeSizeMap.set(n.id, { width, height });
-    nodePositionMap.set(n.id, n.position);
-  }
-
-  // Compute subgraph bounds from child node positions, then create group nodes
-  const PADDING = 30;
-  const LABEL_HEIGHT = 32;
-
-  for (const sg of graph.subgraphs) {
-    // Compute bounding box of child nodes
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const nid of sg.nodeIds) {
-      // Only include direct children (nodes assigned to this subgraph)
-      if (nodeToSubgraph.get(nid) !== sg.id) continue;
-      const pos = nodePositionMap.get(nid);
-      const size = nodeSizeMap.get(nid);
-      if (pos && size) {
-        minX = Math.min(minX, pos.x);
-        minY = Math.min(minY, pos.y);
-        maxX = Math.max(maxX, pos.x + size.width);
-        maxY = Math.max(maxY, pos.y + size.height);
+    if (n.size) {
+      width = n.size.width;
+      height = n.size.height;
+    } else {
+      const base = estimateNodeSize(n.label);
+      width = base.width;
+      height = base.height;
+      if (n.type === "decision") {
+        width = Math.max(120, base.width * 1.6);
+        height = Math.max(80, base.height * 1.6);
+      } else if (n.type === "circle") {
+        const diameter = Math.max(64, Math.ceil(Math.sqrt(base.width * base.width + base.height * base.height) * 0.75));
+        width = diameter;
+        height = diameter;
       }
     }
 
-    const hasBounds = minX !== Infinity;
-    const sgWidth = hasBounds ? maxX - minX + PADDING * 2 : 300;
-    const sgHeight = hasBounds ? maxY - minY + PADDING * 2 + LABEL_HEIGHT : 200;
-    const sgX = hasBounds ? minX - PADDING : 0;
-    const sgY = hasBounds ? minY - PADDING - LABEL_HEIGHT : 0;
-
-    // When nodes have a parent, their positions become relative to the parent.
-    // Adjust child node positions to be relative to the subgraph origin.
-    if (hasBounds) {
-      for (const nid of sg.nodeIds) {
-        if (nodeToSubgraph.get(nid) !== sg.id) continue;
-        const pos = nodePositionMap.get(nid);
-        if (pos) {
-          nodePositionMap.set(nid, {
-            x: pos.x - sgX,
-            y: pos.y - sgY,
-          });
-        }
-      }
-    }
-
-    const parentSg = sg.parentSubgraph;
-    nodes.push({
-      id: sg.id,
-      type: "subgraph",
-      position: { x: sgX, y: sgY },
-      zIndex: -1,
-      data: {
-        label: sg.label,
-        mermaidType: "subgraph",
-        onRenameNode,
-        isLocked,
-        isSubgraph: true,
-      },
-      ...(parentSg ? { parentId: parentSg } : {}),
-      style: {
-        width: sgWidth,
-        height: sgHeight,
-      },
-    });
-  }
-
-  // Create regular nodes (using adjusted positions for those inside subgraphs)
-  for (const n of graph.nodes) {
-    const size = nodeSizeMap.get(n.id) ?? { width: 100, height: 40 };
-    const position = nodePositionMap.get(n.id) ?? n.position;
-    const parentSgId = nodeToSubgraph.get(n.id);
-    nodes.push({
+    return {
       id: n.id,
       type: n.type,
-      position,
-      width: size.width,
-      height: size.height,
+      position: n.position,
+      width,
+      height,
+      style: nodeStyleToCss({ ...graph.globalNodeStyle, ...n.style }),
       data: {
         label: n.label,
         mermaidType: n.type,
+        style: {
+          ...graph.globalNodeStyle,
+          ...n.style,
+        },
         onRenameNode,
         isLocked,
       },
-      ...(parentSgId ? { parentId: parentSgId, extent: "parent" as const } : {}),
-    });
-  }
+    };
+  });
 
   const edges: Edge[] = graph.edges.map((e) => ({
     id: e.id,
@@ -185,7 +117,11 @@ export function graphToReactFlow(
     target: e.target,
     type: "custom",
     animated: e.type === "dotted",
-    style: e.type === "thick" ? { strokeWidth: 3 } : undefined,
+    style: {
+      ...(e.type === "thick" ? { strokeWidth: 3 } : {}),
+      ...edgeStyleToCss(graph.globalEdgeStyle),
+      ...edgeStyleToCss(e.style),
+    },
     data: {
       edgeLabel: e.label ?? "",
       edgeId: e.id,

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useDiagramStore } from "@/stores/diagram-store";
 import type { DiagramStyles } from "@/types/graph";
-import { getMermaidInitConfig, applyMermaidTheme } from "@/lib/mermaid-theme";
+import { parseAnnotations, stylesFromCode } from "@/lib/parser/annotations";
 import {
   ZoomIn,
   ZoomOut,
@@ -13,25 +13,28 @@ import {
   ChevronRight,
   Eye,
   EyeOff,
+  AlertCircle,
 } from "lucide-react";
 
 let mermaidInstance: typeof import("mermaid") | null = null;
 let renderCounter = 0;
-let lastThemeDark: boolean | null = null;
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 5;
 const ZOOM_STEP = 0.25;
 
 async function getMermaid() {
-  const currentDark = typeof window !== "undefined"
-    ? window.matchMedia("(prefers-color-scheme: dark)").matches
-    : false;
-
-  if (!mermaidInstance || lastThemeDark !== currentDark) {
+  if (!mermaidInstance) {
     mermaidInstance = await import("mermaid");
-    mermaidInstance.default.initialize(getMermaidInitConfig());
-    lastThemeDark = currentDark;
+    mermaidInstance.default.initialize({
+      startOnLoad: false,
+      securityLevel: "loose",
+      theme: "default",
+      flowchart: {
+        htmlLabels: true,
+        useMaxWidth: false,
+      },
+    });
   }
   return mermaidInstance.default;
 }
@@ -170,8 +173,14 @@ function applyStylesToSvg(svgEl: SVGSVGElement, styles: DiagramStyles): void {
 
   // Per-edge overrides
   if (styles.edges) {
-    for (const [edgeId, es] of Object.entries(styles.edges)) {
-      const safeEdgeId = sanitizeCssSelector(edgeId);
+    for (const [edgeKey, es] of Object.entries(styles.edges)) {
+      // edgeKey may be "source->target" (canonical, from code annotations) or
+      // a legacy internal id like "e0" (from older sidecar JSON). Translate
+      // "source->target" to mermaid's SVG id prefix `L_<source>_<target>`.
+      const isCodeKey = edgeKey.includes("->");
+      const safeEdgeId = isCodeKey
+        ? `L_${sanitizeCssSelector(edgeKey.replace("->", "_"))}`
+        : sanitizeCssSelector(edgeKey);
       const pathRules: string[] = [];
       const labelRules: string[] = [];
 
@@ -214,6 +223,7 @@ export function MermaidPreview() {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const malformedAnnotations = useMemo(() => parseAnnotations(code).malformed, [code]);
   const generationRef = useRef(0);
 
   // Zoom/pan state
@@ -226,12 +236,6 @@ export function MermaidPreview() {
   // Section toggle state
   const [sections, setSections] = useState<SubgraphSection[]>([]);
   const [sectionPanelOpen, setSectionPanelOpen] = useState(false);
-  const sectionsRef = useRef<SubgraphSection[]>([]);
-
-  // Keep sectionsRef in sync with sections state so async callbacks can read latest value
-  useEffect(() => {
-    sectionsRef.current = sections;
-  }, [sections]);
 
   // Parse subgraphs whenever code changes
   const parsedSections = useMemo(() => parseSubgraphs(code), [code]);
@@ -245,60 +249,39 @@ export function MermaidPreview() {
     });
   }, [parsedSections]);
 
-  // Apply section visibility to the SVG DOM
-  const applySectionVisibility = useCallback(
-    (targetSections: SubgraphSection[]) => {
-      if (!containerRef.current) return;
-      const svgEl = containerRef.current.querySelector("svg");
-      if (!svgEl) return;
+  // Apply section visibility to SVG
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const svgEl = containerRef.current.querySelector("svg");
+    if (!svgEl) return;
 
-      for (const section of targetSections) {
-        const groups = svgEl.querySelectorAll<SVGGElement>("g.cluster");
-        for (const g of groups) {
-          const gId = g.getAttribute("id") ?? "";
-          const labelEl = g.querySelector(".cluster-label, .nodeLabel");
-          const labelText = labelEl?.textContent?.trim() ?? "";
-          if (
-            gId.includes(section.id) ||
-            labelText === section.label ||
-            labelText === section.id
-          ) {
-            g.style.display = section.visible ? "" : "none";
-          }
-        }
-
-        // Also hide individual nodes within hidden subgraphs by matching ids
-        const escapedId = CSS.escape(section.id);
-        const nodeGroups = svgEl.querySelectorAll<SVGGElement>(
-          `g[id*="${escapedId}"]`
-        );
-        for (const ng of nodeGroups) {
-          if (!ng.classList.contains("cluster")) {
-            ng.style.display = section.visible ? "" : "none";
-          }
+    for (const section of sections) {
+      // Mermaid renders subgraphs as <g> with class "cluster" and an id containing the subgraph id
+      const groups = svgEl.querySelectorAll<SVGGElement>("g.cluster");
+      for (const g of groups) {
+        const gId = g.getAttribute("id") ?? "";
+        const labelEl = g.querySelector(".cluster-label, .nodeLabel");
+        const labelText = labelEl?.textContent?.trim() ?? "";
+        if (
+          gId.includes(section.id) ||
+          labelText === section.label ||
+          labelText === section.id
+        ) {
+          g.style.display = section.visible ? "" : "none";
         }
       }
-    },
-    []
-  );
 
-  // Re-apply section visibility whenever sections state changes
-  useEffect(() => {
-    applySectionVisibility(sections);
-  }, [sections, applySectionVisibility]);
-
-  // Re-init mermaid and re-render when system theme changes
-  const [, setThemeTick] = useState(0);
-  useEffect(() => {
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => {
-      // Force mermaid re-init on next render
-      lastThemeDark = null;
-      setThemeTick((t) => t + 1);
-    };
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
-  }, []);
+      // Also hide individual nodes within hidden subgraphs by matching ids
+      const nodeGroups = svgEl.querySelectorAll<SVGGElement>(
+        `g[id*="${section.id}"]`
+      );
+      for (const ng of nodeGroups) {
+        if (!ng.classList.contains("cluster")) {
+          ng.style.display = section.visible ? "" : "none";
+        }
+      }
+    }
+  }, [sections]);
 
   // Mermaid render effect
   useEffect(() => {
@@ -323,7 +306,7 @@ export function MermaidPreview() {
         const DOMPurify = (await import("dompurify")).default;
         const clean = DOMPurify.sanitize(svg, {
           USE_PROFILES: { svg: true, svgFilters: true, html: true },
-          ADD_TAGS: ["foreignObject"],
+          ADD_TAGS: ["foreignObject", "style"],
           HTML_INTEGRATION_POINTS: { foreignobject: true },
           FORBID_TAGS: ["script", "iframe"],
           FORBID_ATTR: [
@@ -338,23 +321,12 @@ export function MermaidPreview() {
 
         if (containerRef.current && generation === generationRef.current) {
           containerRef.current.innerHTML = clean;
-          // Re-apply section visibility to the newly rendered SVG
-          applySectionVisibility(sectionsRef.current);
 
-          // Apply base theme CSS to the rendered SVG
+          // Apply style overrides to the rendered SVG (sidecar JSON + code annotations)
           const svgEl = containerRef.current.querySelector("svg");
           if (svgEl) {
-            applyMermaidTheme(svgEl as SVGSVGElement);
-
-            // Apply user style overrides on top of the base theme
-            if (styleOverridesJson) {
-              try {
-                const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
-                applyStylesToSvg(svgEl as SVGSVGElement, styles);
-              } catch {
-                // ignore invalid JSON
-              }
-            }
+            const styles = stylesFromCodeAndSidecar(code, styleOverridesJson);
+            applyStylesToSvg(svgEl, styles);
           }
 
           setParseError(null);
@@ -371,27 +343,29 @@ export function MermaidPreview() {
 
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- styleOverridesJson intentionally excluded; style-only updates handled by dedicated effect below
-  }, [code, setError, applySectionVisibility]);
+  }, [code, setError]);
 
-  // Re-apply styles when styleOverrides changes without re-rendering
+  // Re-apply styles when code or styleOverrides changes without re-rendering the diagram
   useEffect(() => {
     if (!containerRef.current) return;
     const svgEl = containerRef.current.querySelector("svg");
     if (!svgEl) return;
 
-    if (styleOverridesJson) {
-      try {
-        const styles = JSON.parse(styleOverridesJson) as DiagramStyles;
-        applyStylesToSvg(svgEl, styles);
-      } catch {
-        // ignore invalid JSON
-      }
+    const styles = stylesFromCodeAndSidecar(code, styleOverridesJson);
+    const hasAnyStyles =
+      !!styles.globalNode ||
+      !!styles.globalEdge ||
+      (!!styles.nodes && Object.keys(styles.nodes).length > 0) ||
+      (!!styles.edges && Object.keys(styles.edges).length > 0);
+
+    if (hasAnyStyles) {
+      applyStylesToSvg(svgEl, styles);
     } else {
-      // Remove any injected styles
+      // Nothing to apply — strip any previously injected style element
       const existingStyle = svgEl.querySelector("style[data-eulard-styles]");
       if (existingStyle) existingStyle.remove();
     }
-  }, [styleOverridesJson]);
+  }, [code, styleOverridesJson]);
 
   // Zoom helpers
   const clampZoom = useCallback((z: number) => {
@@ -591,6 +565,18 @@ export function MermaidPreview() {
         </div>
       )}
 
+      {!parseError && malformedAnnotations.length > 0 && (
+        <div
+          className="px-3 py-1.5 text-xs bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-b border-amber-200 dark:border-amber-900 shrink-0 flex items-center gap-1"
+          title={malformedAnnotations
+            .map((entry) => `Line ${entry.lineNumber}: ${entry.reason}`)
+            .join("\n")}
+        >
+          <AlertCircle size={12} />
+          {malformedAnnotations.length} malformed annotation{malformedAnnotations.length === 1 ? "" : "s"}
+        </div>
+      )}
+
       {/* Zoomable/pannable viewport */}
       <div
         ref={viewportRef}
@@ -631,4 +617,34 @@ export function MermaidPreview() {
       )}
     </div>
   );
+}
+
+/**
+ * Build a DiagramStyles view from legacy sidecar JSON, then layer code
+ * annotations on top.
+ */
+export function stylesFromCodeAndSidecar(
+  code: string,
+  styleOverridesJson: string | null
+): DiagramStyles {
+  const result: DiagramStyles = {};
+  if (styleOverridesJson) {
+    try {
+      const parsed = JSON.parse(styleOverridesJson) as DiagramStyles;
+      result.globalNode = { ...parsed.globalNode };
+      result.globalEdge = { ...parsed.globalEdge };
+      result.nodes = { ...parsed.nodes };
+      result.edges = { ...parsed.edges };
+    } catch {
+      // ignore invalid JSON
+    }
+  }
+
+  const codeStyles = stylesFromCode(code);
+  return {
+    globalNode: { ...result.globalNode, ...codeStyles.globalNode },
+    globalEdge: { ...result.globalEdge, ...codeStyles.globalEdge },
+    nodes: { ...result.nodes, ...codeStyles.nodes },
+    edges: { ...result.edges, ...codeStyles.edges },
+  };
 }

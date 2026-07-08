@@ -1,14 +1,25 @@
-import type { FlowchartGraph, GraphNode, GraphEdge, GraphSubgraph } from "@/types/graph";
+import type {
+  FlowchartGraph,
+  GraphNode,
+  GraphEdge,
+  GraphSubgraph,
+  NodeStyleOverride,
+  EdgeStyleOverride,
+} from "@/types/graph";
+import { serializeAnnotation } from "./annotations";
+import type { NodeAnnotation, EdgeAnnotation } from "@/types/annotations";
 
 /**
  * Serialize a flowchart graph model back to mermaid code.
  */
 export function graphToMermaid(graph: FlowchartGraph): string {
   const lines: string[] = [];
+  const emitPositions = graph.nodes.some(
+    (n) => n.position.x !== 0 || n.position.y !== 0
+  );
 
   lines.push(`flowchart ${graph.direction}`);
 
-  // Build a set of node IDs that belong to any subgraph
   const nodesInSubgraphs = new Set<string>();
   for (const sg of graph.subgraphs) {
     for (const nid of sg.nodeIds) {
@@ -16,7 +27,6 @@ export function graphToMermaid(graph: FlowchartGraph): string {
     }
   }
 
-  // Build a set of edges that belong inside subgraphs (both endpoints in same subgraph)
   const edgesInSubgraphs = new Set<string>();
   for (const sg of graph.subgraphs) {
     const sgNodeSet = new Set(sg.nodeIds);
@@ -27,7 +37,6 @@ export function graphToMermaid(graph: FlowchartGraph): string {
     }
   }
 
-  // Emit top-level node definitions (nodes not in any subgraph)
   for (const node of graph.nodes) {
     if (nodesInSubgraphs.has(node.id)) continue;
     const def = nodeToMermaid(node);
@@ -36,7 +45,6 @@ export function graphToMermaid(graph: FlowchartGraph): string {
     }
   }
 
-  // Emit subgraph blocks
   const emittedSubgraphs = new Set<string>();
   function emitSubgraph(sg: GraphSubgraph, indent: string) {
     if (emittedSubgraphs.has(sg.id)) return;
@@ -45,14 +53,12 @@ export function graphToMermaid(graph: FlowchartGraph): string {
     const label = sg.label !== sg.id ? `${sg.id}[${sg.label}]` : sg.id;
     lines.push(`${indent}subgraph ${label}`);
 
-    // Emit child subgraphs first (nested)
     for (const child of graph.subgraphs) {
       if (child.parentSubgraph === sg.id) {
         emitSubgraph(child, indent + "    ");
       }
     }
 
-    // Emit node definitions inside this subgraph
     const sgNodeSet = new Set(sg.nodeIds);
     for (const node of graph.nodes) {
       if (!sgNodeSet.has(node.id)) continue;
@@ -62,7 +68,6 @@ export function graphToMermaid(graph: FlowchartGraph): string {
       }
     }
 
-    // Emit edges where both endpoints are in this subgraph
     for (const edge of graph.edges) {
       if (sgNodeSet.has(edge.source) && sgNodeSet.has(edge.target)) {
         lines.push(`${indent}    ${edgeToMermaid(edge)}`);
@@ -72,18 +77,33 @@ export function graphToMermaid(graph: FlowchartGraph): string {
     lines.push(`${indent}end`);
   }
 
-  // Emit top-level subgraphs (those without a parent)
   for (const sg of graph.subgraphs) {
     if (!sg.parentSubgraph) {
       emitSubgraph(sg, "    ");
     }
   }
 
-  // Emit edges not inside any subgraph (cross-subgraph or top-level edges)
   for (const edge of graph.edges) {
     if (!edgesInSubgraphs.has(edge.id)) {
       lines.push(`    ${edgeToMermaid(edge)}`);
     }
+  }
+
+  const annotationLines: string[] = [];
+  for (const node of graph.nodes) {
+    const ann = nodeAnnotation(node, emitPositions);
+    if (ann) annotationLines.push(`    ${serializeAnnotation(ann)}`);
+  }
+  for (const edge of graph.edges) {
+    const ann = edgeAnnotation(edge);
+    if (ann) annotationLines.push(`    ${serializeAnnotation(ann)}`);
+  }
+  if (annotationLines.length > 0) {
+    lines.push(...annotationLines);
+  }
+
+  if (graph.passthrough?.length) {
+    lines.push(...graph.passthrough);
   }
 
   return lines.join("\n");
@@ -103,9 +123,14 @@ function nodeToMermaid(node: GraphNode): string {
       return `${id}[(${label})]`;
     case "circle":
       return `${id}((${label}))`;
+    case "hexagon":
+      return `${id}{{${label}}}`;
+    case "parallelogram":
+      return `${id}[/${label}/]`;
+    case "trapezoid":
+      return `${id}[/${label}\\]`;
     case "default":
     default:
-      // Only use brackets if label differs from id
       return label !== id ? `${id}[${label}]` : id;
   }
 }
@@ -129,4 +154,32 @@ function edgeArrow(type: GraphEdge["type"]): string {
     default:
       return "-->";
   }
+}
+
+function nodeAnnotation(
+  node: GraphNode,
+  emitPositions: boolean
+): NodeAnnotation | null {
+  const hasSize = !!node.size;
+  const hasStyle = !!node.style && Object.values(node.style).some((v) => v != null && v !== "");
+
+  if (!emitPositions && !hasSize && !hasStyle) return null;
+
+  const ann: NodeAnnotation = { kind: "node", id: node.id };
+  if (emitPositions) ann.position = node.position;
+  if (hasSize) ann.size = node.size;
+  if (hasStyle) ann.style = node.style as NodeStyleOverride;
+  return ann;
+}
+
+function edgeAnnotation(edge: GraphEdge): EdgeAnnotation | null {
+  if (!edge.style) return null;
+  const hasStyle = Object.values(edge.style).some((v) => v != null && v !== "");
+  if (!hasStyle) return null;
+  return {
+    kind: "edge",
+    source: edge.source,
+    target: edge.target,
+    style: edge.style as EdgeStyleOverride,
+  };
 }
