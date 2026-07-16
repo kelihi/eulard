@@ -32,6 +32,10 @@ import {
 import { logger } from "@/lib/logger";
 import { generateId } from "@/lib/utils";
 import {
+  getAnthropicApiKey,
+  resolveModelId,
+} from "@/lib/ai/models";
+import {
   listClients,
   getClient,
   isConfigured as isFeedbackSystemConfigured,
@@ -39,11 +43,6 @@ import {
 import type { ClientResponse } from "@/lib/feedback-system";
 
 export const maxDuration = 60;
-
-function getApiKey(): string | null {
-  if (process.env.ANTHROPIC_API_KEY) return process.env.ANTHROPIC_API_KEY;
-  return null;
-}
 
 /**
  * Format a client response into a concise text summary for the AI.
@@ -115,7 +114,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const apiKey = getApiKey();
+  const apiKey = getAnthropicApiKey();
   if (!apiKey) {
     log.done(401, "no API key configured", { userId: user.id });
     return NextResponse.json(
@@ -176,16 +175,14 @@ export async function POST(request: Request) {
     }
   }
 
-  const allowedModels = [
-    "claude-sonnet-4-6",
-    "claude-opus-4-6",
-  ];
-  const modelId = allowedModels.includes(clientModel)
-    ? clientModel
-    : "claude-sonnet-4-6";
-  const maxSteps = typeof clientMaxSteps === "number"
-    ? Math.max(1, Math.min(100, clientMaxSteps))
-    : 15;
+  const [modelId, maxSteps] = await Promise.all([
+    resolveModelId(clientModel),
+    Promise.resolve(
+      typeof clientMaxSteps === "number"
+        ? Math.max(1, Math.min(100, clientMaxSteps))
+        : 15
+    ),
+  ]);
 
   // Load custom system prompt from the database
   const customPrompt = await getSetting("ai_system_prompt");

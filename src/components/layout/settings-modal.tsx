@@ -5,8 +5,8 @@ import { X, Key, Check, Trash2, Cpu, Zap, Keyboard } from "lucide-react";
 import {
   useAISettingsStore,
   AI_MODELS,
-  type AIModelId,
 } from "@/stores/ai-settings-store";
+import type { ModelOption } from "@/lib/ai/models";
 import { formatShortcut } from "@/hooks/use-keyboard-shortcuts";
 
 interface SettingsModalProps {
@@ -36,6 +36,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [recordingTarget, setRecordingTarget] = useState<ShortcutTarget | null>(null);
   const [shortcutSaving, setShortcutSaving] = useState(false);
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
+
+  // AI model list from the server
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([...AI_MODELS]);
+  const [modelsLoading, setModelsLoading] = useState(false);
 
   const aiMaxSteps = useAISettingsStore((s) => s.maxSteps);
   const aiModel = useAISettingsStore((s) => s.model);
@@ -75,11 +79,33 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             setSendMode(data.sendMode);
           }
         });
+
+      // Load the current Anthropic model list from the server
+      setModelsLoading(true);
+      fetch("/api/ai/models")
+        .then((r) => {
+          if (!r.ok) return null;
+          return r.json() as Promise<{ models: ModelOption[]; defaultModel: string }>;
+        })
+        .then((data) => {
+          if (data?.models && data.models.length > 0) {
+            setAvailableModels(data.models);
+            const ids = new Set(data.models.map((m) => m.id));
+            if (!ids.has(aiModel)) {
+              const defaultModel = data.models.find((m) => m.id === data.defaultModel)?.id ?? data.models[0].id;
+              setAIModel(defaultModel);
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => setModelsLoading(false));
+
       setApiKey("");
       setMessage(null);
       setShortcutMessage(null);
       setRecordingTarget(null);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Handle keyboard recording for shortcut customization
@@ -414,15 +440,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 AI Model
               </label>
               <p className="text-xs text-[var(--muted-foreground)] mb-3">
-                Choose the Claude model for AI chat. Opus 4.6 is most capable;
-                Sonnet 4.6 is faster and cheaper.
+                Choose the Claude model for AI chat. The list is fetched from
+                Anthropic so new releases appear automatically.
               </p>
               <select
                 value={aiModel}
-                onChange={(e) => setAIModel(e.target.value as AIModelId)}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                onChange={(e) => setAIModel(e.target.value)}
+                disabled={modelsLoading}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-[var(--background)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent disabled:opacity-50"
               >
-                {AI_MODELS.map((m) => (
+                {availableModels.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
                   </option>

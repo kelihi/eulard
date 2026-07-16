@@ -4,6 +4,7 @@ import { requireAdminFromRequest } from "@/lib/auth";
 import { getSetting, setSetting, deleteSetting } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { getDefaultSystemPrompt } from "@/lib/ai/system-prompt";
+import { getDefaultModelId } from "@/lib/ai/models";
 
 // Setting keys for AI configuration
 const AI_SETTING_KEYS = {
@@ -19,9 +20,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const [systemPrompt, model] = await Promise.all([
+  const [systemPrompt, model, defaultModel] = await Promise.all([
     getSetting(AI_SETTING_KEYS.SYSTEM_PROMPT),
     getSetting(AI_SETTING_KEYS.MODEL),
+    getDefaultModelId(),
   ]);
 
   log.done(200, "fetched AI settings", { userId: admin.id });
@@ -29,7 +31,7 @@ export async function GET(request: Request) {
     systemPrompt: systemPrompt ?? null,
     defaultSystemPrompt: getDefaultSystemPrompt(),
     model: model ?? null,
-    defaultModel: "claude-sonnet-4-20250514",
+    defaultModel,
   });
 }
 
@@ -72,15 +74,16 @@ export async function PUT(request: Request) {
 
   log.done(200, "updated AI settings", { userId: admin.id });
 
-  const [currentPrompt, currentModel] = await Promise.all([
+  const [currentPrompt, currentModel, defaultModel] = await Promise.all([
     getSetting(AI_SETTING_KEYS.SYSTEM_PROMPT),
     getSetting(AI_SETTING_KEYS.MODEL),
+    getDefaultModelId(),
   ]);
 
   return NextResponse.json({
     systemPrompt: currentPrompt ?? null,
     defaultSystemPrompt: getDefaultSystemPrompt(),
     model: currentModel ?? null,
-    defaultModel: "claude-sonnet-4-20250514",
+    defaultModel,
   });
 }
